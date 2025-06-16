@@ -151,14 +151,17 @@ const DailyReportService = {
     
     return {
       date: Utilities.formatDate(actualDate, CONFIG.TIME_ZONE, "yyyy/MM/dd"),
-      behavior: dataMap['Q1：今天完成了哪些？'],
-      sleepStart: dataMap['Q2.1：昨晚入睡時間'],
-      sleepEnd: dataMap['Q2.2：今天起床時間'],
-      sleepQuality: dataMap['Q2.3：昨晚睡眠品質如何？'],
-      mood: dataMap['Q4：今日整體心情感受'] || 'N/A',
-      energy: dataMap['Q3：今日整體精力水平如何？'],
-      note: dataMap['Q6：今天想記點什麼？'],
-      weight: (dataMap['體重'] !== null && dataMap['體重'] !== '') ? parseFloat(dataMap['體重']) : null,
+      behavior: dataMap['今天完成了哪些？'],
+      sleepStart: dataMap['昨晚實際入睡時間'],
+      sleepEnd: dataMap['今天實際起床時間'],
+      sleepPlanned: dataMap['今晚預計幾點入睡？'],
+      sleepQuality: dataMap['昨晚睡眠品質如何？'],
+      mood: dataMap['今日整體心情感受'] || 'N/A',
+      energy: dataMap['今日整體精力水平如何？'],
+      note: dataMap['今天想記點什麼？'],
+      weight: (dataMap['體重紀錄'] !== null && dataMap['體重紀錄'] !== '') ? parseFloat(dataMap['體重紀錄']) : null,
+      screenTime: dataMap['今日手機螢幕使用時間'] || null,
+      topApps: dataMap['今日使用最多的 App'] || null
     };
   },
   

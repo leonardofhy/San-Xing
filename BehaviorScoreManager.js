@@ -118,7 +118,7 @@ function collectBehaviors() {
     throw new Error(`Log sheet not found: '${CONFIG.SHEET_NAME}'`);
   }
 
-  const behaviorColumnName = 'Q1：今天完成了哪些？';
+  const behaviorColumnName = '今天完成了哪些？';
   const headers = logSheet.getRange(1, 1, 1, logSheet.getLastColumn()).getValues()[0];
   const idx = headers.indexOf(behaviorColumnName);
   if (idx === -1) {
