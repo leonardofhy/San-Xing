@@ -53,4 +53,4 @@ Open the `Config.js` file to adjust non-sensitive parameters according to your p
 
 ## 📄 License
 
-This project is licensed under the [MIT License](https://www.google.com/search?q=./LICENSE).
+This project is licensed under the [MIT License](./LICENSE).
