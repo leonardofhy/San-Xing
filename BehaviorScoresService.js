@@ -133,10 +133,13 @@ const BehaviorScoreService = {
     try {
       console.log('Reading behavior scores from Google Sheet...');
       const ss = SpreadsheetApp.getActiveSpreadsheet();
-      const scoreSheet = ss.getSheetByName('Behavior Scores');
+      // [Fixed] Use the sheet name from the global CONFIG object
+      const sheetName = CONFIG.OUTPUT.BEHAVIOR_SHEET;
+      const scoreSheet = ss.getSheetByName(sheetName);
       
       if (!scoreSheet) {
-        throw new Error("Sheet named 'Behavior Scores' not found!");
+        // [Fixed] Improved error message
+        throw new Error(`Sheet named '${sheetName}' not found! Please check CONFIG.OUTPUT.BEHAVIOR_SHEET.`);
       }
       const lastRow = scoreSheet.getLastRow();
       if (lastRow <= 1) return {};
@@ -154,7 +157,8 @@ const BehaviorScoreService = {
       return scores;
     } catch(e) {
       console.error(e.message);
-      SpreadsheetApp.getUi().alert(e.message);
+      // [Fixed] Removed SpreadsheetApp.getUi() which is not available in all contexts
+      // SpreadsheetApp.getUi().alert(e.message);
       return {};
     }
   },

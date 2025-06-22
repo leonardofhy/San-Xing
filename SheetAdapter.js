@@ -14,6 +14,19 @@ const SheetAdapter = {
     if (!this.spreadsheet) {
       this.spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     }
+    // Ensure schema versions for core sheets are up to date
+    try {
+      const sheetsToCheck = [CONFIG.SHEET_NAME, CONFIG.OUTPUT.DAILY_SHEET, CONFIG.OUTPUT.BEHAVIOR_SHEET];
+      sheetsToCheck.forEach(name => {
+        try {
+          SchemaService.ensureVersion(name);
+        } catch (e) {
+          console.warn('[SheetAdapter] ensureVersion failed for', name, e.message);
+        }
+      });
+    } catch (e) {
+      console.warn('[SheetAdapter] schema ensureVersion skipped:', e.message);
+    }
     return this;
   },
   
@@ -82,6 +95,15 @@ const SheetAdapter = {
         sheet: sheetName,
         changes: schemaChanges
       });
+      
+      // After detecting schemaChanges
+      // Sync headers
+      if (CONFIG.OUTPUT.AUTO_CREATE_SHEETS) {
+        console.log(`[SheetAdapter] Syncing headers for ${sheetName}...`);
+        const newHeaders = SchemaService.getHeaders(sheetName);
+        sheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]);
+        console.log(`[SheetAdapter] Headers synced for ${sheetName}`);
+      }
     }
     
     // Read data rows
