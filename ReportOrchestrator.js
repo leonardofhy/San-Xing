@@ -38,25 +38,44 @@ const ReportOrchestrator = {
     
     console.log(`[ReportOrchestrator] Starting daily report generation for ${context.date}`);
     
-    // Start the event chain
-    EventBus.emit('REPORT_GENERATION_STARTED', context);
-    
     // Return a promise that resolves when the report is complete
     return new Promise((resolve, reject) => {
-      const completeHandler = (result) => {
+      const completeHandler = (context) => {
         EventBus.off('REPORT_GENERATION_COMPLETED', completeHandler);
         EventBus.off('REPORT_GENERATION_FAILED', failHandler);
+        
+        // Return structured result
+        const result = {
+          date: context.date,
+          emailSent: context.emailSent || false,
+          emailSkipped: context.emailSkipped || false,
+          wasUpdated: context.wasUpdated || false,
+          scores: context.scores,
+          executionTime: new Date() - context.startTime,
+          ...(context.emailError && { emailError: context.emailError.message })
+        };
+        
+        console.log('[ReportOrchestrator] Report generation completed:', result);
         resolve(result);
       };
       
-      const failHandler = (error) => {
+      const failHandler = (errorData) => {
         EventBus.off('REPORT_GENERATION_COMPLETED', completeHandler);
         EventBus.off('REPORT_GENERATION_FAILED', failHandler);
+        
+        const error = errorData.error || new Error('Unknown error');
+        error.phase = errorData.phase;
+        error.context = errorData.context;
+        
+        console.error('[ReportOrchestrator] Report generation failed:', error);
         reject(error);
       };
       
       EventBus.on('REPORT_GENERATION_COMPLETED', completeHandler);
       EventBus.on('REPORT_GENERATION_FAILED', failHandler);
+
+      // Start the event chain *after* listeners are in place
+      EventBus.emit('REPORT_GENERATION_STARTED', context);
     });
   },
   
@@ -117,7 +136,23 @@ const ReportOrchestrator = {
     EventBus.on('REPORT_GENERATION_STARTED', (context) => {
       try {
         const data = SheetAdapter.readData('MetaLog');
-        const targetData = this._findTargetData(data, context.date);
+        let targetData = null;
+        
+        // Check if we should use latest data or find by date
+        if (context.options.useLatestData) {
+          targetData = this._getLatestData(data);
+          if (targetData) {
+            // Update context date to match the actual data date
+            let actualDate = new Date(targetData.timestamp);
+            if (targetData.timestamp.getHours() < 3) {
+              actualDate.setDate(actualDate.getDate() - 1);
+            }
+            context.date = Utilities.formatDate(actualDate, CONFIG.TIME_ZONE, "yyyy/MM/dd");
+            console.log(`[ReportOrchestrator] Using latest data, adjusted date to: ${context.date}`);
+          }
+        } else {
+          targetData = this._findTargetData(data, context.date);
+        }
         
         if (!targetData) {
           throw new Error(`No data found for date: ${context.date}`);
@@ -215,7 +250,10 @@ const ReportOrchestrator = {
           sleepTotal: context.scores.sleep.total || 0,
           sleepDuration: context.scores.sleep.details?.duration?.score || 0,
           sleepQuality: context.scores.sleep.details?.quality?.score || 0,
-          sleepRegularity: context.scores.sleep.details?.regularity?.score || 0
+          sleepRegularity: context.scores.sleep.details?.regularity?.score || 0,
+          behaviorScoreVersion: ScoreCalculatorFactory.activeVersions.behavior,
+          sleepScoreVersion: ScoreCalculatorFactory.activeVersions.sleep,
+          analysisVersion: CONFIG.ANALYSIS_VERSION
         };
         
         // Check if we should overwrite existing
@@ -248,10 +286,19 @@ const ReportOrchestrator = {
     
     // Email sending phase
     EventBus.on('REPORT_SAVED', (context) => {
-      if (!CONFIG.ENABLE_DAILY_EMAIL || !context.wasUpdated) {
+      // Check if email should be sent
+      const shouldSendEmail = CONFIG.ENABLE_DAILY_EMAIL && 
+        (context.wasUpdated || context.options.forceEmail);
+      
+      if (!shouldSendEmail) {
+        console.log('[ReportOrchestrator] Skipping email - not enabled or not updated');
+        context.emailSent = false;
+        context.emailSkipped = true;
         EventBus.emit('REPORT_GENERATION_COMPLETED', context);
         return;
       }
+      
+      console.log('[ReportOrchestrator] Sending email - wasUpdated:', context.wasUpdated, 'forceEmail:', context.options.forceEmail);
       
       EmailService.sendDailyReport({
         date: context.date,
@@ -290,8 +337,8 @@ const ReportOrchestrator = {
    */
   _getCurrentDate() {
     const now = new Date();
-    // Adjust for early morning entries
-    if (now.getHours() < 2) {
+    // Adjust for early morning entries (0:00-3:00 counts as previous day)
+    if (now.getHours() < 3) {
       now.setDate(now.getDate() - 1);
     }
     return Utilities.formatDate(now, CONFIG.TIME_ZONE, "yyyy/MM/dd");
@@ -308,8 +355,8 @@ const ReportOrchestrator = {
       if (entry.timestamp instanceof Date) {
         let entryDate = new Date(entry.timestamp);
         
-        // Apply date adjustment for early morning entries
-        if (entry.timestamp.getHours() < 2) {
+        // Apply date adjustment for early morning entries (0:00-3:00 counts as previous day)
+        if (entry.timestamp.getHours() < 3) {
           entryDate.setDate(entryDate.getDate() - 1);
         }
         
@@ -319,6 +366,24 @@ const ReportOrchestrator = {
         }
       }
     }
+    return null;
+  },
+  
+  /**
+   * Get the latest data entry (most recent)
+   * @private
+   */
+  _getLatestData(data) {
+    if (data.length === 0) return null;
+    
+    // Return the last entry (most recent)
+    const latestEntry = data[data.length - 1];
+    
+    if (latestEntry.timestamp instanceof Date) {
+      console.log(`[ReportOrchestrator] Using latest entry from: ${Utilities.formatDate(latestEntry.timestamp, CONFIG.TIME_ZONE, "yyyy/MM/dd HH:mm")}`);
+      return latestEntry;
+    }
+    
     return null;
   },
   
@@ -366,5 +431,49 @@ const ReportOrchestrator = {
     }
     
     return existingDates;
+  },
+  
+  /**
+   * Calculate scores only (no LLM, no email, no sheet write)
+   * @param {Object} options { date: 'yyyy/MM/dd', useLatestData: boolean }
+   * @returns {Promise<Object>} { date, scores }
+   */
+  async calculateScoresOnly(options = {}) {
+    this.init();
+
+    const targetDate = options.date || this._getCurrentDate();
+    const data = SheetAdapter.readData(CONFIG.SHEET_NAME);
+
+    // Find target data (reuse existing helper)
+    let targetData = null;
+    if (options.useLatestData) {
+      targetData = this._getLatestData(data);
+    } else {
+      targetData = this._findTargetData(data, targetDate);
+    }
+    if (!targetData) {
+      throw new Error(`No data found for date: ${targetDate}`);
+    }
+
+    // Calculate scores
+    // Behaviors array
+    const behaviors = targetData.behaviors
+      ? targetData.behaviors.split(',').map(b => b.trim()).filter(Boolean)
+      : [];
+
+    const behaviorScore = ScoreCalculatorFactory.calculate('behavior', behaviors);
+    const sleepScore = ScoreCalculatorFactory.calculate('sleep', {
+      start: targetData.sleepStart,
+      end: targetData.sleepEnd,
+      quality: targetData.sleepQuality
+    });
+
+    return {
+      date: targetDate,
+      scores: {
+        behavior: behaviorScore,
+        sleep: sleepScore
+      }
+    };
   }
 }; 

@@ -8,9 +8,10 @@ const ScoreCalculatorFactory = {
     sleep: {}
   },
   
+  // Active calculator versions (initialized from CONFIG if available)
   activeVersions: {
-    behavior: 'v1',
-    sleep: 'v1'
+    behavior: (typeof CONFIG !== 'undefined' && CONFIG.VERSIONS?.BEHAVIOR_SCORE) ? CONFIG.VERSIONS.BEHAVIOR_SCORE : '1.0.0',
+    sleep: (typeof CONFIG !== 'undefined' && CONFIG.VERSIONS?.SLEEP_SCORE) ? CONFIG.VERSIONS.SLEEP_SCORE : '1.0.0'
   },
   
   /**
@@ -174,4 +175,23 @@ ScoreCalculatorFactory.registerCalculator('sleep', 'v1', {
       lastUpdated: '2024-03-01'
     };
   }
-}); 
+});
+
+// ------------------------------------------------------------------
+// Alias default calculators to semantic version numbers from CONFIG
+// This ensures factory lookup succeeds when activeVersions use semver
+// ------------------------------------------------------------------
+
+if (typeof CONFIG !== 'undefined' && CONFIG.VERSIONS) {
+  const { BEHAVIOR_SCORE, SLEEP_SCORE } = CONFIG.VERSIONS;
+
+  // Create alias for behavior calculator if needed
+  if (BEHAVIOR_SCORE && BEHAVIOR_SCORE !== 'v1') {
+    ScoreCalculatorFactory.calculators.behavior[BEHAVIOR_SCORE] = ScoreCalculatorFactory.calculators.behavior['v1'];
+  }
+
+  // Create alias for sleep calculator if needed
+  if (SLEEP_SCORE && SLEEP_SCORE !== 'v1') {
+    ScoreCalculatorFactory.calculators.sleep[SLEEP_SCORE] = ScoreCalculatorFactory.calculators.sleep['v1'];
+  }
+} 

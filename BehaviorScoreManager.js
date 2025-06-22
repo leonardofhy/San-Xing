@@ -89,7 +89,7 @@ const BehaviorScoreManager = (() => {
   // -------------------------
   function initializeScoreSheet() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const scoreSheetName = CONFIG.OUTPUT.BEHAVIOR_SHEET || 'Behavior Scores';
+    const scoreSheetName = CONFIG.OUTPUT.BEHAVIOR_SHEET || 'BehaviorScores';
     let sheet = ss.getSheetByName(scoreSheetName);
     if (!sheet) {
       console.log(`Score sheet '${scoreSheetName}' not found, creating...`);

@@ -20,49 +20,56 @@ const SleepQualityService = {
    * @returns {Object} Object containing total score and detailed information
    */
   calculateSleepHealthIndex: function(sleepData) {
-    if (!sleepData || !sleepData.start || !sleepData.end || !sleepData.quality) {
-      console.error('Incomplete sleep data, cannot calculate score.');
-      return {
-        total: 0,
-        details: {
-          duration: { hours: 0, score: 0, evaluation: 'Incomplete data' },
-          quality: { rating: 0, score: 0, evaluation: 'Incomplete data' },
-          regularity: { score: 0, evaluation: 'Incomplete data' }
-        },
-        summary: {}
-      };
+    // Gracefully handle missing fields. Each sub-score becomes null when data is absent.
+    if (!sleepData) sleepData = {};
+
+    const hasStart = !!sleepData.start;
+    const hasEnd = !!sleepData.end;
+    const hasQuality = sleepData.quality !== undefined && sleepData.quality !== null && sleepData.quality !== '';
+
+    // Duration & regularity rely on start/end
+    let durationHours = null;
+    let durationScore = null;
+    let regularityScore = null;
+
+    if (hasStart && hasEnd) {
+      const startTime = this._parseTime(sleepData.start);
+      const endTime = this._parseTime(sleepData.end);
+      durationHours = endTime - startTime;
+      if (durationHours < 0) durationHours += 24;
+      durationScore = this._calculateDurationScore(durationHours);
+      regularityScore = this._calculateSleepRegularityScore(sleepData.start);
     }
 
-    const startTime = this._parseTime(sleepData.start);
-    const endTime = this._parseTime(sleepData.end);
-    let duration = endTime - startTime;
-    if (duration < 0) duration += 24; // Handle overnight sleep
-    
-    const durationScore = this._calculateDurationScore(duration);
-    const qualityScore = (Number(sleepData.quality) / 5) * 40;
-    const regularityScore = this._calculateSleepRegularityScore(sleepData.start);
-    
-    const totalScore = durationScore + qualityScore + regularityScore;
-    
+    // Quality score
+    let qualityScore = null;
+    if (hasQuality) {
+      qualityScore = (Number(sleepData.quality) / 5) * 40;
+    }
+
+    // Total only when all parts are present
+    const parts = [durationScore, qualityScore, regularityScore];
+    const totalScore = parts.every(v => v !== null) ? (durationScore + qualityScore + regularityScore) : null;
+
     return {
-      total: Math.round(totalScore),
+      total: totalScore !== null ? Math.round(totalScore) : null,
       details: {
         duration: {
-          hours: duration,
+          hours: durationHours,
           score: durationScore,
-          evaluation: this._getDurationEvaluation(duration)
+          evaluation: durationScore !== null ? this._getDurationEvaluation(durationHours) : 'Missing data'
         },
         quality: {
-          rating: sleepData.quality,
+          rating: hasQuality ? sleepData.quality : null,
           score: qualityScore,
-          evaluation: this._getQualityEvaluation(sleepData.quality)
+          evaluation: qualityScore !== null ? this._getQualityEvaluation(sleepData.quality) : 'Missing data'
         },
         regularity: {
           score: regularityScore,
-          evaluation: this._getRegularityEvaluation(regularityScore)
+          evaluation: regularityScore !== null ? this._getRegularityEvaluation(regularityScore) : 'Missing data'
         }
       },
-      summary: this._generateSleepSummary(duration, sleepData.quality, regularityScore)
+      summary: totalScore !== null ? this._generateSleepSummary(durationHours, sleepData.quality, regularityScore) : {}
     };
   },
 

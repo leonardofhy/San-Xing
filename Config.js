@@ -9,13 +9,13 @@ const CONFIG = {
 
   // --- Sheet Names ---
   OUTPUT: {
-    DAILY_SHEET: "Daily Report",      // Daily report output
-    WEEKLY_SHEET: "Weekly Report",    // Weekly report output 
+    DAILY_SHEET: "DailyReport",      // Daily report output
     BEHAVIOR_SHEET: "BehaviorScores", // Behavior scores (no space for consistency)
     
     // Behavior Settings
     OVERWRITE_EXISTING: true,         // Whether to overwrite existing reports
-    AUTO_CREATE_SHEETS: true          // Auto-create sheets if not exist
+    AUTO_CREATE_SHEETS: true,         // Auto-create sheets if not exist
+    AUTO_SYNC_HEADERS: true          // Auto-sync headers
   },
 
   // --- API Settings ---
@@ -23,6 +23,16 @@ const CONFIG = {
   DAILY_MODEL: "deepseek-reasoner",
   WEEKLY_MODEL: "deepseek-reasoner",
   BEHAVIOR_SCORE_MODEL: "deepseek-chat",
+
+  // --- Versioning ---
+  VERSIONS: {
+    BEHAVIOR_SCORE: "1.0.0",   // MAJOR.MINOR.PATCH, update when behavior scoring logic changes
+    SLEEP_SCORE:    "1.0.0",   // update when sleep scoring logic changes
+    ANALYSIS:       "1.0.0"    // update when prompt / model changes affect analysis output
+  },
+
+  // (Legacy alias) Kept for backward-compatibility with existing code. Prefer CONFIG.VERSIONS.ANALYSIS.
+  ANALYSIS_VERSION: "1.0.0",  
 
   // --- Email Settings ---
   ENABLE_DAILY_EMAIL: true,
@@ -39,8 +49,8 @@ const CONFIG = {
   BATCH_PROCESS: {
     ENABLED: true,
     DATE_RANGE: {
-      START: "2025-06-08",
-      END: "2025-06-13"
+      START: "2025-04-21",
+      END: "2025-06-21"
     },
     SKIP_EXISTING: true,
     DELAY_BETWEEN_CALLS: 1000  // Delay between API calls (ms)

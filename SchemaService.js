@@ -12,10 +12,12 @@ const SchemaService = {
         sleepStart: '昨晚實際入睡時間',
         sleepEnd: '今天實際起床時間',
         sleepPlanned: '今晚預計幾點入睡？',
-        sleepQuality: '昨晚睡眠品質如何？',
         mood: '今日整體心情感受',
-        energy: '今日整體精力水平如何？',
         note: '今天想記點什麼？',
+        sleepQuality: '昨晚睡眠品質如何？',
+        energy: '今日整體精力水平如何？',
+        email: 'Email address',
+        feedback: 'Meta-Awareness Log 填寫反饋和修改建議',
         weight: '體重紀錄',
         screenTime: '今日手機螢幕使用時間',
         topApps: '今日使用最多的 App'
@@ -38,7 +40,8 @@ const SchemaService = {
         
         // --- [New in v2] Metadata columns for traceability ---
         behaviorScoreVersion: 'Behavior Score Version',
-        sleepScoreVersion: 'Sleep Score Version'
+        sleepScoreVersion: 'Sleep Score Version',
+        analysisVersion: 'Analysis Version'
       }
     },
     [CONFIG.OUTPUT.BEHAVIOR_SHEET]: {
@@ -183,5 +186,43 @@ const SchemaService = {
       reverse[header] = field;
     });
     return reverse;
+  },
+  
+  /**
+   * Ensure the given sheet stores (and matches) the expected schema version.
+   * Version info is stored in cell A1 NOTE to avoid interfering with headers.
+   * If missing, the note will be created. If mismatched, emit warning event.
+   * @param {string} sheetName
+   */
+  ensureVersion(sheetName) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      throw new Error(`[SchemaService] Sheet not found while ensuring version: ${sheetName}`);
+    }
+
+    const expected = CONFIG.SCHEMA_VERSIONS[sheetName] || '1.0.0';
+    const cell = sheet.getRange(1, 1); // A1 (header row)
+    let stored = (cell.getNote() || '').trim();
+
+    // If A1 already contains header text, keep it; we only use the NOTE meta field.
+    if (!stored) {
+      cell.setNote(expected);
+      stored = expected;
+      console.log(`[SchemaService] Wrote initial schema version ${expected} to ${sheetName}`);
+    }
+
+    if (stored !== expected) {
+      console.warn(`[SchemaService] ${sheetName} schema version mismatch: sheet=${stored}, expected=${expected}`);
+      if (typeof EventBus !== 'undefined') {
+        EventBus.emit('SCHEMA_MISMATCH_DETECTED', {
+          sheet: sheetName,
+          stored: stored,
+          expected: expected
+        });
+      }
+      // Placeholder for future automatic migration logic
+      // TODO: implement migrations from stored -> expected
+    }
   }
 }; 
