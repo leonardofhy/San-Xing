@@ -10,6 +10,7 @@ const CONFIG = {
   // --- Sheet Names ---
   OUTPUT: {
     DAILY_SHEET: "DailyReport",      // Daily report output
+    WEEKLY_SHEET: "WeeklyReport",  // Weekly report output
     BEHAVIOR_SHEET: "BehaviorScores", // Behavior scores (no space for consistency)
     
     // Behavior Settings
@@ -37,7 +38,6 @@ const CONFIG = {
   // --- Email Settings ---
   ENABLE_DAILY_EMAIL: true,
   DAILY_EMAIL_SUBJECT: "{date} 每日摘要｜心情: {mood}｜行為: {behaviorScore}｜睡眠: {sleepScore}",
-  WEEKLY_EMAIL_SUBJECT: "週報告 | {dateRange}",
 
   // --- Report Generation Settings ---
   DAILY_REPORT_DATE: {
@@ -54,6 +54,17 @@ const CONFIG = {
     },
     SKIP_EXISTING: true,
     DELAY_BETWEEN_CALLS: 1000  // Delay between API calls (ms)
+  },
+
+  // --- Weekly Report Settings ---
+  ENABLE_WEEKLY_EMAIL: true,
+  WEEKLY_EMAIL_SUBJECT: "週報告 | {dateRange}",
+
+  // Add weekly report configuration:
+  WEEKLY_REPORT: {
+    WEEK_START_DAY: 0, // 0=Sunday, 1=Monday
+    INCLUDE_DAILY_BREAKDOWN: true,
+    MIN_DAYS_REQUIRED: 5, // Minimum days of data to generate report
   },
 
   // --- Schema Versions ---

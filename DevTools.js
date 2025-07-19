@@ -58,6 +58,53 @@ async function debugDailyReportGeneration() {
 }
 
 /**
+ * Debug weekly report generation process
+ * Shows detailed information about each step
+ */
+async function debugWeeklyReportGeneration() {
+  console.log('========== Debug Weekly Report Generation ==========');
+  
+  try {
+    // Clear event history first
+    EventBus.eventHistory = [];
+    
+    console.log('1. Starting weekly report generation...');
+    const result = await ReportOrchestrator.generateWeeklyReport({ debug: true });
+    
+    console.log('2. Weekly report generation completed');
+    console.log('Result:', JSON.stringify(result, null, 2));
+    
+    console.log('3. Event history:');
+    const history = EventBus.getEventHistory();
+    history.forEach((event, index) => {
+      console.log(`   ${index + 1}. [${Utilities.formatDate(event.timestamp, CONFIG.TIME_ZONE, "HH:mm:ss")}] ${event.event}`);
+      if (event.data && event.data.error) {
+        console.log(`      Error: ${event.data.error.message}`);
+      }
+    });
+    
+    console.log('4. Configuration check:');
+    console.log('   ENABLE_WEEKLY_EMAIL:', CONFIG.ENABLE_WEEKLY_EMAIL);
+    console.log('   RECIPIENT_EMAIL:', CONFIG.RECIPIENT_EMAIL ? 'Set' : 'Not set');
+    console.log('   WEEK_START_DAY:', CONFIG.WEEKLY_REPORT.WEEK_START_DAY);
+    console.log('   MIN_DAYS_REQUIRED:', CONFIG.WEEKLY_REPORT.MIN_DAYS_REQUIRED);
+    
+    return result;
+  } catch (error) {
+    console.error('Debug weekly report generation failed:', error);
+    const history = EventBus.getEventHistory();
+    console.log('Event history at failure:');
+    history.forEach((event, index) => {
+      console.log(`   ${index + 1}. ${event.event}`);
+      if (event.data && event.data.error) {
+        console.log(`      Error: ${event.data.error.message}`);
+      }
+    });
+    throw error;
+  }
+}
+
+/**
  * Test the microservices architecture
  */
 function testMicroservicesArchitecture() {

@@ -84,3 +84,36 @@ function runBatchReportGeneration() {
     throw error;
   }
 } 
+
+
+/**
+ * Main trigger function for weekly report generation.
+ * Generates a report for the current week (Sunday to Saturday).
+ */
+function runWeeklyReportGeneration() {
+  console.log('[Main] Weekly report generation triggered');
+  
+  const options = {
+    reportType: 'weekly',
+    weekOffset: 0 // 0 = current week, -1 = last week, etc.
+  };
+  
+  return runWeeklyReport(options);
+}
+
+/**
+ * Universal weekly report runner.
+ * @param {Object} options - Generation options
+ * @param {number} [options.weekOffset=0] - Week offset (0=current, -1=previous)
+ * @param {string} [options.startDate] - Custom week start date (yyyy/MM/dd)
+ * @param {boolean} [options.forceEmail=false] - Force email sending
+ */
+async function runWeeklyReport(options = {}) {
+  console.log('========== Weekly Report Runner ==========');
+  try {
+    return await ReportOrchestrator.generateWeeklyReport(options);
+  } catch (error) {
+    console.error('Weekly report generation failed:', error);
+    throw error;
+  }
+}

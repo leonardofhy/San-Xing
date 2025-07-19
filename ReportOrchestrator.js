@@ -475,5 +475,320 @@ const ReportOrchestrator = {
         sleep: sleepScore
       }
     };
+  },
+
+  /**
+   * Generate a weekly report
+   * @param {Object} options - Generation options
+   * @returns {Promise} Report generation result
+   */
+  generateWeeklyReport(options = {}) {
+    this.init();
+    
+    const context = {
+      startTime: new Date(),
+      options: Object.assign({ reportType: 'weekly', weekOffset: 0 }, options),
+      reportType: 'weekly',
+      results: {}
+    };
+    
+    // Calculate week range
+    const now = new Date();
+    const weekOffset = context.options.weekOffset || 0;
+    const startOfWeek = new Date(now.getTime() - (weekOffset * 7 + now.getDay()) * 24 * 60 * 60 * 1000);
+    const endOfWeek = new Date(startOfWeek.getTime() + 6 * 24 * 60 * 60 * 1000);
+    
+    context.weekRange = {
+      start: Utilities.formatDate(startOfWeek, CONFIG.TIME_ZONE, "yyyy/MM/dd"),
+      end: Utilities.formatDate(endOfWeek, CONFIG.TIME_ZONE, "yyyy/MM/dd")
+    };
+    
+    console.log(`[ReportOrchestrator] Starting weekly report generation for ${context.weekRange.start} - ${context.weekRange.end}`);
+    
+    // Register weekly event handlers if not already done
+    this._registerWeeklyEventHandlers();
+    
+    // Return a promise that resolves when the report is complete
+    return new Promise((resolve, reject) => {
+      const completeHandler = (result) => {
+        EventBus.off('WEEKLY_REPORT_GENERATION_COMPLETED', completeHandler);
+        EventBus.off('WEEKLY_REPORT_GENERATION_FAILED', failHandler);
+        resolve(result);
+      };
+      
+      const failHandler = (error) => {
+        EventBus.off('WEEKLY_REPORT_GENERATION_COMPLETED', completeHandler);
+        EventBus.off('WEEKLY_REPORT_GENERATION_FAILED', failHandler);
+        console.error('[ReportOrchestrator] Weekly report generation failed:', error);
+        reject(error);
+      };
+      
+      EventBus.on('WEEKLY_REPORT_GENERATION_COMPLETED', completeHandler);
+      EventBus.on('WEEKLY_REPORT_GENERATION_FAILED', failHandler);
+      
+      // Start the weekly report generation
+      EventBus.emit('WEEKLY_REPORT_GENERATION_STARTED', context);
+    });
+  },
+
+  /**
+   * Register weekly event handlers - only registers once
+   * @private
+   */
+  _registerWeeklyEventHandlers() {
+    if (this._weeklyHandlersRegistered) return;
+    
+    // Data collection phase
+    EventBus.on('WEEKLY_REPORT_GENERATION_STARTED', (context) => {
+      try {
+        console.log('[ReportOrchestrator] Starting weekly data collection...');
+        const weeklyData = this._collectWeeklyData(context.weekRange);
+        context.weeklyData = weeklyData;
+        EventBus.emit('WEEKLY_DATA_COLLECTED', context);
+      } catch (error) {
+        console.error('[ReportOrchestrator] Weekly data collection failed:', error);
+        EventBus.emit('WEEKLY_REPORT_GENERATION_FAILED', {
+          context: context,
+          error: error,
+          phase: 'data_collection'
+        });
+      }
+    });
+
+    // Score aggregation phase
+    EventBus.on('WEEKLY_DATA_COLLECTED', (context) => {
+      try {
+        console.log(`[ReportOrchestrator] Collected ${context.weeklyData.dailyData.length} days of data for week ${context.weekRange.start} - ${context.weekRange.end}`);
+        const aggregatedScores = this._aggregateWeeklyScores(context.weeklyData);
+        context.aggregatedScores = aggregatedScores;
+        EventBus.emit('WEEKLY_SCORES_AGGREGATED', context);
+      } catch (error) {
+        console.error('[ReportOrchestrator] Score aggregation failed:', error);
+        EventBus.emit('WEEKLY_REPORT_GENERATION_FAILED', {
+          context: context,
+          error: error,
+          phase: 'score_aggregation'
+        });
+      }
+    });
+
+    // Prompt building phase
+    EventBus.on('WEEKLY_SCORES_AGGREGATED', (context) => {
+      try {
+        console.log('[ReportOrchestrator] Building weekly prompt...');
+        const prompt = PromptBuilderService.buildWeeklyPrompt(context);
+        context.results.prompt = prompt;
+        EventBus.emit('WEEKLY_PROMPT_READY', context);
+      } catch (error) {
+        console.error('[ReportOrchestrator] Prompt building failed:', error);
+        EventBus.emit('WEEKLY_REPORT_GENERATION_FAILED', {
+          context: context,
+          error: error,
+          phase: 'weekly_prompt_building'
+        });
+      }
+    });
+
+    // API call phase with better error handling
+    EventBus.on('WEEKLY_PROMPT_READY', async (context) => {
+      try {
+        console.log('[ReportOrchestrator] Sending weekly prompt to API...');
+        console.log('[ReportOrchestrator] Prompt length:', context.results.prompt.length);
+        
+        const response = await ApiService.callLLM(context.results.prompt, { 
+          systemMessage: PromptBuilderService.getSystemMessage('weekly') 
+        });
+        context.results.analysis = response;
+        EventBus.emit('WEEKLY_ANALYSIS_RECEIVED', context);
+      } catch (error) {
+        console.error('[ReportOrchestrator] API call failed:', error);
+        console.error('[ReportOrchestrator] Error details:', {
+          name: error.name,
+          message: error.message
+        });
+        EventBus.emit('WEEKLY_REPORT_GENERATION_FAILED', {
+          context: context,
+          error: error,
+          phase: 'api_call'
+        });
+      }
+    });
+
+    // Email sending phase
+    EventBus.on('WEEKLY_ANALYSIS_RECEIVED', (context) => {
+      try {
+        console.log('[ReportOrchestrator] Sending weekly email...');
+        
+        // Prepare report data for email service
+        const reportData = {
+          weekStart: context.weekRange.start,
+          weekEnd: context.weekRange.end,
+          analysis: context.results.analysis,
+          aggregatedScores: context.aggregatedScores,
+          daysWithData: context.weeklyData.dailyData.length,
+          totalDays: 7,
+          weeklyData: context.weeklyData
+        };
+        
+        const emailSent = EmailService.sendWeeklyReport(reportData);
+        context.results.emailSent = emailSent;
+        
+        console.log('[ReportOrchestrator] Weekly report generation completed successfully');
+        EventBus.emit('WEEKLY_REPORT_GENERATION_COMPLETED', {
+          weekRange: context.weekRange,
+          emailSent: emailSent,
+          analysis: context.results.analysis
+        });
+      } catch (error) {
+        console.error('[ReportOrchestrator] Email sending failed:', error);
+        EventBus.emit('WEEKLY_REPORT_GENERATION_FAILED', {
+          context: context,
+          error: error,
+          phase: 'email_sending'
+        });
+      }
+    });
+    
+    this._weeklyHandlersRegistered = true;
+  },
+
+  /**
+   * Collect weekly data from the sheet
+   * @private
+   */
+  _collectWeeklyData(weekRange) {
+    // Use the same data reading approach as daily reports
+    const data = SheetAdapter.readData('MetaLog');
+    const dailyData = [];
+    
+    // Check if data exists and is an array
+    if (!data || !Array.isArray(data)) {
+      console.log('[ReportOrchestrator] No data found in MetaLog sheet');
+      return {
+        weekStart: weekRange.start,
+        weekEnd: weekRange.end,
+        dailyData: []
+      };
+    }
+    
+    console.log(`[ReportOrchestrator] Found ${data.length} total entries in MetaLog`);
+    
+    // Filter data to the week range - use same logic as daily reports
+    const startDate = new Date(weekRange.start);
+    const endDate = new Date(weekRange.end);
+    endDate.setHours(23, 59, 59, 999); // Include the entire end date
+    
+    data.forEach(entry => {
+      if (!entry || !entry.timestamp) return;
+      
+      // Use the same timestamp logic as daily reports
+      if (!(entry.timestamp instanceof Date)) {
+        console.log('[ReportOrchestrator] Skipping entry with invalid timestamp:', entry);
+        return;
+      }
+      
+      let entryDate = new Date(entry.timestamp);
+      
+      // Apply same date adjustment as daily reports (early morning entries count as previous day)
+      if (entry.timestamp.getHours() < 3) {
+        entryDate.setDate(entryDate.getDate() - 1);
+      }
+      
+      // Check if entry falls within the week range
+      if (entryDate < startDate || entryDate > endDate) {
+        return;
+      }
+      
+      // Calculate scores for this day using the same logic as daily reports
+      const behaviors = entry.behaviors 
+        ? entry.behaviors.split(',').map(b => b.trim()).filter(Boolean)
+        : [];
+      
+      const behaviorScore = ScoreCalculatorFactory.calculate('behavior', behaviors);
+      const sleepScore = ScoreCalculatorFactory.calculate('sleep', {
+        start: entry.sleepStart,
+        end: entry.sleepEnd,
+        quality: entry.sleepQuality
+      });
+      
+      // Get notes field
+      const notes = entry.note || '';
+      
+      const adjustedDateStr = Utilities.formatDate(entryDate, CONFIG.TIME_ZONE, "yyyy/MM/dd");
+      
+      dailyData.push({
+        date: adjustedDateStr,
+        adjustedDate: adjustedDateStr,
+        timestamp: entry.timestamp,
+        behaviorTotal: behaviorScore.total,
+        behaviorRaw: behaviorScore.details?.rawScore || 0,
+        sleepTotal: sleepScore.total,
+        notes: notes
+      });
+    });
+    
+    console.log(`[ReportOrchestrator] Filtered to ${dailyData.length} entries for week ${weekRange.start} - ${weekRange.end}`);
+    
+    return {
+      weekStart: weekRange.start,
+      weekEnd: weekRange.end,
+      dailyData: dailyData
+    };
+  },
+
+  /**
+   * Aggregate weekly scores
+   * @private
+   */
+  _aggregateWeeklyScores(weeklyData) {
+    const { dailyData } = weeklyData;
+    
+    if (dailyData.length === 0) {
+      return {
+        avgBehaviorTotal: 0,
+        avgBehaviorRaw: 0,
+        avgSleepTotal: 0,
+        behaviorTrend: '無數據',
+        sleepTrend: '無數據',
+        totalDays: 7
+      };
+    }
+    
+    const behaviorTotals = dailyData.map(day => day.behaviorTotal || 0);
+    const behaviorRaws = dailyData.map(day => day.behaviorRaw || 0);
+    const sleepTotals = dailyData.map(day => day.sleepTotal || 0);
+    
+    const avgBehaviorTotal = behaviorTotals.reduce((a, b) => a + b, 0) / behaviorTotals.length;
+    const avgBehaviorRaw = behaviorRaws.reduce((a, b) => a + b, 0) / behaviorRaws.length;
+    const avgSleepTotal = sleepTotals.reduce((a, b) => a + b, 0) / sleepTotals.length;
+    
+    // Simple trend analysis
+    const behaviorTrend = this._calculateTrend(behaviorTotals);
+    const sleepTrend = this._calculateTrend(sleepTotals);
+    
+    return {
+      avgBehaviorTotal,
+      avgBehaviorRaw,
+      avgSleepTotal,
+      behaviorTrend,
+      sleepTrend,
+      totalDays: 7
+    };
+  },
+
+  /**
+   * Calculate trend for a series of values
+   * @private
+   */
+  _calculateTrend(values) {
+    if (values.length < 2) return '無法判斷';
+    
+    const first = values[0];
+    const last = values[values.length - 1];
+    const diff = last - first;
+    
+    if (diff > 5) return '改善中';
+    if (diff < -5) return '需關注';
+    return '穩定';
   }
 }; 

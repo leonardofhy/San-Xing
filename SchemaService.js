@@ -51,14 +51,42 @@ const SchemaService = {
         category: 'Category',
         lastUpdated: 'Last Updated'
       }
-    }
+    },
+    [CONFIG.OUTPUT.WEEKLY_SHEET]: {
+      v1: {
+        timestamp: 'Report Generated',
+        weekStart: 'Week Start',
+        weekEnd: 'Week End',
+        dateRange: 'Date Range',
+        daysWithData: 'Days with Data',
+        totalDays: 'Total Days',
+        
+        // Aggregated scores
+        avgBehaviorTotal: 'Avg Behavior Total',
+        avgBehaviorRaw: 'Avg Behavior Raw',
+        avgSleepTotal: 'Avg Sleep Total',
+        
+        // Weekly trends
+        behaviorTrend: 'Behavior Trend',
+        sleepTrend: 'Sleep Trend',
+        
+        // Analysis
+        analysis: 'Weekly Analysis',
+        insights: 'Key Insights',
+        recommendations: 'Recommendations',
+        
+        // Metadata
+        analysisVersion: 'Analysis Version'
+      }
+    },
   },
   
   currentVersions: {
     // Also use computed property names here and link to SCHEMA_VERSIONS in Config
     [CONFIG.SHEET_NAME]: CONFIG.SCHEMA_VERSIONS.MetaLog,
     [CONFIG.OUTPUT.DAILY_SHEET]: CONFIG.SCHEMA_VERSIONS.DailyReport,
-    [CONFIG.OUTPUT.BEHAVIOR_SHEET]: CONFIG.SCHEMA_VERSIONS.BehaviorScores
+    [CONFIG.OUTPUT.BEHAVIOR_SHEET]: CONFIG.SCHEMA_VERSIONS.BehaviorScores,
+    [CONFIG.OUTPUT.WEEKLY_SHEET]: 'v1' // Add weekly sheet version
   },
   
   /**

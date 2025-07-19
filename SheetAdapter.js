@@ -50,8 +50,9 @@ const SheetAdapter = {
       sheet = this.spreadsheet.insertSheet(sheetName);
       
       // Initialize with headers if schema exists
+      let headers = null;
       try {
-        const headers = SchemaService.getHeaders(sheetName);
+        headers = SchemaService.getHeaders(sheetName);
         sheet.appendRow(headers);
         console.log(`[SheetAdapter] Created sheet '${sheetName}' with headers`);
       } catch (e) {
@@ -202,6 +203,54 @@ const SheetAdapter = {
     }
     
     return null;
+  },
+  
+  /**
+   * Find row by date range for weekly reports
+   * @param {string} sheetName - Name of the sheet
+   * @param {string} startDate - Start date (yyyy/MM/dd format)
+   * @param {string} endDate - End date (yyyy/MM/dd format)
+   * @returns {number|null} Row index or null if not found
+   */
+  findRowByDateRange(sheetName, startDate, endDate) {
+    try {
+      const data = this.readData(sheetName);
+      
+      if (!data || data.length === 0) {
+        console.log(`[SheetAdapter] No data found in sheet: ${sheetName}`);
+        return null;
+      }
+      
+      for (let i = data.length - 1; i >= 0; i--) {
+        const rowData = data[i];
+        
+        // Check for weekStart and weekEnd fields in weekly reports
+        if (rowData.weekStart instanceof Date && rowData.weekEnd instanceof Date) {
+          const rowStartDate = Utilities.formatDate(rowData.weekStart, CONFIG.TIME_ZONE, "yyyy/MM/dd");
+          const rowEndDate = Utilities.formatDate(rowData.weekEnd, CONFIG.TIME_ZONE, "yyyy/MM/dd");
+          
+          if (rowStartDate === startDate && rowEndDate === endDate) {
+            console.log(`[SheetAdapter] Found existing weekly report for ${startDate} - ${endDate} at row ${i + 2}`);
+            return i + 2; // +2 because: +1 for 0-based to 1-based, +1 for header row
+          }
+        }
+        
+        // Also check dateRange field as fallback
+        if (rowData.dateRange) {
+          const expectedRange = `${startDate} - ${endDate}`;
+          if (rowData.dateRange === expectedRange) {
+            console.log(`[SheetAdapter] Found existing weekly report by dateRange for ${expectedRange} at row ${i + 2}`);
+            return i + 2;
+          }
+        }
+      }
+      
+      console.log(`[SheetAdapter] No existing weekly report found for ${startDate} - ${endDate}`);
+      return null;
+    } catch (error) {
+      console.error(`[SheetAdapter] Error in findRowByDateRange for ${sheetName}: ${error.message}`);
+      return null;
+    }
   },
   
   /**
