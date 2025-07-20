@@ -495,7 +495,12 @@ const ReportOrchestrator = {
     // Calculate week range
     const now = new Date();
     const weekOffset = context.options.weekOffset || 0;
-    const startOfWeek = new Date(now.getTime() - (weekOffset * 7 + now.getDay()) * 24 * 60 * 60 * 1000);
+    
+    // Fix: Correct week calculation
+    // For weekOffset = -1 (previous week), we want to go back 7 days from start of current week
+    // For weekOffset = 0 (current week), we want start of current week
+    const daysToSubtract = now.getDay() + (weekOffset * -7);
+    const startOfWeek = new Date(now.getTime() - daysToSubtract * 24 * 60 * 60 * 1000);
     const endOfWeek = new Date(startOfWeek.getTime() + 6 * 24 * 60 * 60 * 1000);
     
     context.weekRange = {

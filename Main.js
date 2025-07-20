@@ -88,14 +88,15 @@ function runBatchReportGeneration() {
 
 /**
  * Main trigger function for weekly report generation.
- * Generates a report for the current week (Sunday to Saturday).
+ * Generates a report for the previous week (Sunday to Saturday).
+ * This is designed to run on Sunday morning to summarize the completed week.
  */
 function runWeeklyReportGeneration() {
   console.log('[Main] Weekly report generation triggered');
   
   const options = {
     reportType: 'weekly',
-    weekOffset: 0 // 0 = current week, -1 = last week, etc.
+    weekOffset: -1 // -1 = previous week (completed), 0 = current week, etc.
   };
   
   return runWeeklyReport(options);
@@ -117,3 +118,4 @@ async function runWeeklyReport(options = {}) {
     throw error;
   }
 }
+
