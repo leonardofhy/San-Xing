@@ -53,6 +53,54 @@ const PromptBuilderService = {
     "question": "最後，根據今天的整體紀錄，提出一個最值得我深入思考的開放式問題。"
   }
 }`
+      },
+      v2: {
+        system: "You are a helpful assistant who provides insightful analysis in Traditional Chinese. You must respond strictly in the JSON format requested by the user.",
+        dataSection: `### 原始數據
+- **日期**：{date}
+- **睡眠**：{sleepStart} 入睡，{sleepEnd} 起床。(計算出的睡眠時長約為 {sleepDuration})
+- **主觀感受 (1-5分)**：睡眠品質 {sleepQuality} 分，今日精力 {energy} 分，今日心情 {mood} 分。
+{weightSection}
+- **行為紀錄 (原始清單)**：{behaviors}
+- **自由敘述 (日誌)**：{note}
+
+### 系統評分
+- **行為效率分數**：{behaviorTotal}/100 (原始分: {behaviorRaw})
+  - 正向行為：{positiveBehaviors}
+  - 負向行為：{negativeBehaviors}
+- **睡眠健康指數**：{sleepTotal}/100
+  - 睡眠時長：{sleepDurationEval} ({sleepDurationScore}分)
+  - 睡眠品質：{sleepQualityEval} ({sleepQualityScore}分)
+  - 睡眠規律：{sleepRegularityEval} ({sleepRegularityScore}分)`,
+        
+        instructionSection: `### 分析指令
+你是我的個人成長教練。請用溫暖、有洞察力且具啟發性的語氣，分析以上的日誌數據，並嚴格依照以下 JSON 結構回傳你的分析，不要包含任何 JSON 區塊外的文字或註解。
+
+{
+  "behaviorReview": {
+    "title": "1. 行為盤點",
+    "positive": ["將「行為紀錄 (原始清單)」中的正向行為智慧地分類並列在此處"],
+    "negative": ["將「行為紀錄 (原始清單)」中的負向行為智慧地分類並列在此處"],
+    "neutral": ["將「行為紀錄 (原始清單)」中的中性行為智慧地分類並列在此處"]
+  },
+  "sleepAnalysis": {
+    "title": "2. 睡眠分析與洞察",
+    "insight": "比較客觀睡眠時長({sleepDuration})、主觀品質、與今日精力心情的關係，並提出可能的因果洞察。",
+    "recommendations": ["根據數據提供 1-2 個具體的睡眠改善建議"]
+  },
+  "statusSummary": {
+    "title": "3. 今日狀態短評",
+    "comment": "綜合心情、精力、行為，對今日的整體狀態給出一個總結性短評。",
+    "highlights": ["點出 1-2 個本日的亮點行為"]
+  },
+  "coachFeedback": {
+    "title": "4. AI 教練回饋與提問",
+    "affirmation": "針對本日行為，給予 1 個正向肯定。",
+    "suggestion": "針對本日行為，給予 1 個具體改善建議。",
+    "opportunity": "從「自由敘述 (日誌)」中挖掘 1 個能將日常小事轉化為長期資產的「隱藏機會點」。請點出其情感價值、連結到長期目標、並提供一個具體的小行動。如果日誌為空，則嘗試從「行為紀錄」中尋找機會。",
+    "question": "最後，根據今天的整體紀錄，提出一個最值得我深入思考的開放式問題。"
+  }
+}`
       }
     },
     weekly: {
@@ -88,13 +136,40 @@ const PromptBuilderService = {
 2. **情感與思維變化**：捕捉心境轉換、思考模式的演進、價值觀的體現
 3. **成長信號識別**：發現隱藏的學習機會、人際關係的深化、技能的提升
 4. **模式與趨勢**：結合量化數據，發現行為背後的深層動機和變化趨勢`
+      },
+      v2: {
+        system: "You are a helpful assistant who provides insightful weekly analysis in Traditional Chinese. You must respond strictly in the JSON format requested by the user.",
+        
+        dataSection: `## 本週數據摘要 ({weekStart} - {weekEnd})
+
+### 整體表現
+- **數據完整度**: {daysWithData}/{totalDays} 天
+- **平均行為效率分數**: {avgBehaviorTotal}/100 (原始分: {avgBehaviorRaw})
+- **平均睡眠健康指數**: {avgSleepTotal}/100
+
+### 每日分解
+{dailyBreakdown}
+
+### 趨勢分析
+- **行為分數趨勢**: {behaviorTrend}
+- **睡眠分數趨勢**: {sleepTrend}
+
+### 本週亮點行為
+{weeklyHighlights}
+
+### 需要關注的模式
+{concerningPatterns}`,
+
+        instructionSection: `你的核心任務是擔任我的回憶整理師與專屬教練。請將以下的「本週日誌筆記」作為你分析的絕對中心。所有量化數據（如分數、趨勢）都應用來佐證、解釋或深化你從日誌中得到的洞察。
+
+請以溫暖而有洞察力的週總結教練語氣，分析這週的整體表現模式，並將質化內容整理成一份有意義的個人回憶錄。`
       }
     }
   },
   
   activeVersions: {
-    daily: 'v1',
-    weekly: 'v1'
+    daily: 'v2',
+    weekly: 'v2'
   },
   
   /**
@@ -187,7 +262,7 @@ const PromptBuilderService = {
       .join('\n\n');
 
     const promptParts = [
-      `你是我的個人成長教練和回憶整理師，請深度分析這週的整體表現模式，並從日誌中提取珍貴的生活回憶。`,
+      template.instructionSection, // 使用 v2 的新 instruction
       `## 本週數據摘要 (${weekRange.start} - ${weekRange.end})`,
       `### 整體表現\n` +
       `- **數據完整度**: ${weeklyData.dailyData.length}/${aggregatedScores.totalDays} 天\n` +
@@ -207,17 +282,16 @@ const PromptBuilderService = {
       `### 本週亮點行為\n${weeklyHighlights}`,
       `### 需要關注的模式\n${concerningPatterns}`,
       `---`,
-      `## 📖 回憶錄生成指導\n` +
-      `以上的「本週日誌筆記」是最珍貴的第一手生活記錄。請你作為專業的回憶整理師，深度挖掘其中的重要信息：\n\n` +
-      `**重要經歷識別**: 找出改變想法、帶來新體驗、或有深刻感受的時刻\n` +
-      `**情感軌跡追蹤**: 觀察心境變化、壓力來源、快樂源泉\n` +
-      `**成長信號捕捉**: 發現學習機會、技能提升、思維模式改變\n` +
-      `**關係洞察提煉**: 注意人際互動、友情變化、支持網絡\n` +
-      `**隱藏模式發現**: 結合量化數據，發現行為背後的深層動機`,
+      `## 📖 回憶錄生成指導`,
+      `以上的「本週日誌筆記」是最珍貴的第一手生活記錄。請你作為專業的回憶整理師，深度挖掘其中的重要信息：\n` +
+      `1. **重要經歷識別**: 找出改變想法、帶來新體驗、或有深刻感受的時刻。`,
+      `2. **情感軌跡追蹤**: 觀察心境變化、壓力來源、快樂源泉。`,
+      `3. **成長信號捕捉**: 發現學習機會、技能提升、思維模式改變 (例如：克服一個小挑戰、在筆記中展現自我覺察、成功嘗試一個新日常、或從錯誤中學習等)。`,
+      `4. **關係洞察提煉**: 注意人際互動、友情變化、支持網絡。`,
+      `5. **模式與趨勢的深度連結**: 當你發現一個量化趨勢（例如睡眠分數連續下滑），你必須回到日誌中尋找相關的文字描述來解釋這個趨勢。反之，當你在日誌中讀到一個關鍵事件，也請回頭檢視當天的數據是否有相應的波動。`,
       `---`,
-      template.instructionSection,
-      `請用以下JSON格式回覆：\n\n` +
-      this.getWeeklyAnalysisJsonFormat()
+      `請嚴格依照以下JSON格式回覆，不要包含任何額外說明：\n\n` +
+      this.getWeeklyAnalysisJsonFormatV2() // 使用 v2 的新 JSON 格式
     );
     
     const prompt = promptParts.join('\n\n');
@@ -257,6 +331,39 @@ const PromptBuilderService = {
   "weeklyQuestion": {
     "title": "週末反思問題",
     "question": "一個深度的開放式問題，幫助反思這週的經歷和下週的方向"
+  }
+}`;
+  },
+
+  /**
+   * Returns the JSON format string for the weekly analysis v2.
+   * @returns {string}
+   */
+  getWeeklyAnalysisJsonFormatV2() {
+    return `{
+  "weeklyMemoir": {
+    "title": "本週回憶錄",
+    "mainTheme": "從你的日誌中提煉出本週最核心的一個主題或情緒（例如：『探索與不安』或『對人際關係的重新思考』）。",
+    "keyMoments": ["本週最重要的2-3個時刻或經歷，用溫暖的語調描述，並連結相關數據波動。"],
+    "emotionalJourney": "描述這週的情感變化軌跡，包括高峰、低谷和轉折點，並嘗試從日誌中找到原因。",
+    "growthSignals": ["從日誌中發現的3-4個具體的成長信號或學習機會。"],
+    "relationshipInsights": "這週在人際關係方面的收穫或變化。"
+  },
+  "keyInsights": {
+    "title": "關鍵洞察與模式",
+    "patterns": ["識別出的最重要的一個行為-情緒模式，並結合數據與日誌說明。", "識別出的第二個模式..."],
+    "strengths": ["本週表現突出的方面1", "方面2"],
+    "improvements": ["需要改善的領域1", "領域2"]
+  },
+  "weeklyRecommendations": {
+    "title": "下週行動建議",
+    "priority": "基於本週洞察，下週最值得關注和投入的一個改善點。",
+    "specific": ["具體可執行的建議1", "建議2"],
+    "systemOptimization": "根據本週記錄情況，提供 1 個可以優化『記錄流程』或『生活系統』的建議。"
+  },
+  "weeklyQuestion": {
+    "title": "週末反思問題",
+    "question": "一個深度的開放式問題，幫助我反思這週的核心主題和下週的方向。"
   }
 }`;
   },
