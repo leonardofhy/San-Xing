@@ -1,0 +1,22 @@
+# Example configuration for AI Personal Coach
+# Copy to config.local.toml and edit values, then run:
+#   uv run python -m src.cli --config config.local.toml --days 30
+
+sheet_id = "https://docs.google.com/spreadsheets/d/REPLACE_ME/edit#gid=0"
+credentials_path = "./secrets/service_account.json"
+tab_name = "MetaLog"
+min_diary_length = 3
+default_days_window = 30
+max_char_budget = 8000
+
+llm_endpoint = "https://api.deepseek.com/chat/completions"
+llm_model = "deepseek-reasoner"
+llm_timeout = 30
+llm_max_retries = 2
+llm_api_key = "sk-..."  # Or set env LLM_API_KEY
+
+log_level = "INFO"
+log_format = "json"
+
+# Optional flags
+dry_run = false

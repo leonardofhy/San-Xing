@@ -7,3 +7,19 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Local / secret configs (keep only example)
+config.local.toml
+config.*.local.toml
+*.local.toml
+config.toml
+config.dev.toml
+config.prod.toml
+secrets/
+*.secret.json
+service_account.json
+.env
+.env.*
+
+# Allow the public example config
+!config.example.toml
