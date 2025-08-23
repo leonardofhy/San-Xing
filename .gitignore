@@ -1,2 +1,4 @@
 # Google Clasp local configuration file
 .clasp.json
+
+.github/
