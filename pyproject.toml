@@ -15,7 +15,8 @@ dev = [
   "pytest>=8.4.1",
   "pytest-cov>=6.2.1",
   "black>=24.0.0",
-  "flake8>=6.0.0"
+  "flake8>=6.0.0",
+  "pyclean>=3.1.0",
 ]
 
 [tool.black]
