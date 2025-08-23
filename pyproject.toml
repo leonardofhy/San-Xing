@@ -1,0 +1,35 @@
+[project]
+name = "ai-personal-coach"
+version = "0.1.0"
+description = "Diary insight engine (Phase 0)"
+requires-python = ">=3.11"
+dependencies = [
+  "gspread>=5.7.0",
+  "google-auth>=2.16.0",
+  "requests>=2.28.0",
+  "pandas>=1.5.0"
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.4.1",
+  "pytest-cov>=6.2.1",
+  "black>=24.0.0",
+  "flake8>=6.0.0"
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+
+[tool.uv]
+managed = true
