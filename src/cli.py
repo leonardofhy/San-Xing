@@ -6,10 +6,15 @@ Enhancements:
  - Precedence: CLI > env vars > config file > defaults.
 """
 
-from pathlib import Path
+import argparse
+import hashlib
+import json
+import os
+import re
+import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict
-import argparse, sys, json, re, hashlib, os
 
 try:  # Python 3.11+
     import tomllib  # type: ignore
@@ -18,13 +23,13 @@ except (ModuleNotFoundError, ImportError):  # Fallback to tomli if installed
         import tomli as tomllib  # type: ignore
     except (ModuleNotFoundError, ImportError):
         tomllib = None  # Fallback: only JSON supported
-from .ingestion import SheetIngester
-from .normalizer import EntryNormalizer
-from .window import WindowBuilder
 from .analyzer import LLMAnalyzer
-from .persister import OutputPersister
-from .logger import get_logger
 from .config import Config
+from .ingestion import SheetIngester
+from .logger import get_logger
+from .normalizer import EntryNormalizer
+from .persister import OutputPersister
+from .window import WindowBuilder
 
 logger = get_logger(__name__)
 
@@ -271,9 +276,12 @@ def main():
             )
             sys.exit(0)
 
-    except Exception as e:  # pragma: no cover
-        logger.error("Run failed: %s", str(e), extra={"run_id": run_id})
+    except (ValueError, OSError, RuntimeError) as e:
+        logger.error("Run failed: %s", e, extra={"run_id": run_id})
         sys.exit(1)
+    except KeyboardInterrupt:
+        logger.warning("Run interrupted by user", extra={"run_id": run_id})
+        sys.exit(130)
 
 
 if __name__ == "__main__":
