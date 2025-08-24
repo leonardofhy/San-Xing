@@ -168,6 +168,175 @@ Run Offline (reuse snapshot): set `OFFLINE_SNAPSHOT` in config or env + `DRY_RUN
 
 ---
 
+## CLI Usage & Reference
+
+The Python engine exposes a flexible CLI (`python -m src.cli`) with clear precedence:
+
+Precedence: explicit CLI flag > environment variable > config file (`config.local.toml`) > internal default.
+
+### Core Flags
+
+```text
+--spreadsheet-id / --spreadsheet_id   Google Spreadsheet ID (the long ID after /d/ in the URL)
+--sheet-url                           Full Google Sheets URL (ID auto‑extracted; overrides config)
+--creds PATH                          Service account JSON path
+--config PATH                         Config file (TOML or JSON)
+--tab NAME                            Sheet tab name (default MetaLog)
+--days N                              Analyze last N days (mutually exclusive with --all)
+--all                                 Force full history (ignores --days)
+--output-dir PATH                     Base output directory (default ./data)
+--char-budget N                       Max characters allowed in LLM context window (default 8000)
+--api-key KEY                         LLM API key (alt to env LLM_API_KEY)
+--stream                              Stream LLM tokens to stdout (if provider supports)
+```
+
+### Environment Variable Aliases
+
+You may set these to avoid repeating flags (case sensitive):
+
+```text
+SHEET_ID / SPREADSHEET_ID / SPREADSHEETID          → spreadsheet ID
+LLM_API_KEY / API_KEY                              → LLM key (if not using --api-key)
+CREDENTIALS_PATH / CREDS / CREDENTIALS             → service account JSON path
+TAB / TAB_NAME                                     → tab name
+OUTPUT_DIR / DATA_DIR                              → output directory
+CHAR_BUDGET / MAX_CHARS                            → character budget
+LLM_MODEL / MODEL                                  → model name
+LLM_TIMEOUT / TIMEOUT                              → request timeout (int seconds)
+LLM_MAX_RETRIES / RETRIES                          → retry attempts (int)
+LLM_STREAM                                         → truthy enables streaming
+OFFLINE_SNAPSHOT                                   → path to reuse a previous snapshot (offline mode)
+DRY_RUN                                            → if truthy, skip external LLM calls when offline
+```
+
+### Config File (TOML) Sample
+
+`config.example.toml` (copy to `config.local.toml`):
+
+```toml
+spreadsheet_id = "<sheet-id>"
+creds = "./secrets/service_account.json"
+tab = "MetaLog"
+days = 30
+char_budget = 8000
+llm_model = "deepseek-chat"
+llm_timeout = 60
+llm_max_retries = 2
+output_dir = "./data"
+```
+
+Any of these can be overridden by flags or env vars—only specify what differs from defaults.
+
+### Return / Exit Codes
+
+| Code | Meaning                                                                                |
+| ---- | -------------------------------------------------------------------------------------- |
+| 0    | Success (normal insight pack)                                                          |
+| 10   | Missing / invalid required inputs (spreadsheet ID, creds) or header validation failure |
+| 12   | Config validation failure (`Config.validate`)                                          |
+| 20   | No valid entries after normalization / filtering                                       |
+| 30   | Completed in fallback (LLM error but produced degraded artifact)                       |
+| 1    | Runtime error (ingestion, IO, parsing, LLM, etc.)                                      |
+| 130  | User interrupted (Ctrl+C)                                                              |
+
+Use shell conditionals to branch on fallback vs hard failure:
+
+```bash
+uv run python -m src.cli --config config.local.toml --days 7 || ec=$?
+if [ "${ec}" = "30" ]; then
+   echo "Fallback mode: investigate logs but artifact exists." >&2
+elif [ "${ec}" != "0" ]; then
+   echo "Run failed (exit ${ec})." >&2
+   exit $ec
+fi
+```
+
+### Typical Workflows
+
+1. Last 7 days, explicit sheet URL & creds:
+
+   ```bash
+   uv run python -m src.cli \
+     --sheet-url "https://docs.google.com/spreadsheets/d/<ID>/edit#gid=0" \
+     --creds secrets/service_account.json \
+     --days 7
+   ```
+
+2. Full history (ignore `days` in config):
+
+   ```bash
+   uv run python -m src.cli --config config.local.toml --all
+   ```
+
+3. Override character budget & stream tokens:
+
+   ```bash
+   uv run python -m src.cli --config config.local.toml --days 14 --char-budget 10000 --stream
+   ```
+
+4. Minimal (all via environment):
+
+   ```bash
+   export SPREADSHEET_ID="<ID>"
+   export CREDENTIALS_PATH="./secrets/service_account.json"
+   export LLM_API_KEY="sk-..."
+   uv run python -m src.cli --days 7
+   ```
+
+5. Offline re‑analysis using an existing snapshot:
+
+   ```bash
+   export OFFLINE_SNAPSHOT="data/raw/snapshot_20250824_225142.json"
+   export DRY_RUN=true
+   uv run python -m src.cli --config config.local.toml --days 7
+   ```
+
+### Sample Log Output (Annotated)
+
+Below is a real run (wrapping long lines). Key phases: ingestion → normalization → window → analyze → persist.
+
+```text
+{"ts":"2025-08-24T14:51:39.838238Z","level":"info","phase":"cli","msg":"Loaded config file: config.local.toml"}
+{"ts":"2025-08-24T14:51:39.838557Z","level":"info","phase":"cli","msg":"Starting run 20250824T145139Zce6de6a6b7e68d02 (spreadsheet_id=... tab=MetaLog)","run_id":"20250824T145139Zce6de6a6b7e68d02"}
+{"ts":"2025-08-24T14:51:39.839142Z","level":"info","phase":"ingestion","msg":"Connected to Google Sheets API"}
+{"ts":"2025-08-24T14:51:41.209804Z","level":"warning","phase":"ingestion","msg":"Duplicate header detected; applying auto-unique fallback"}
+{"ts":"2025-08-24T14:51:42.074141Z","level":"info","phase":"ingestion","msg":"Fetched 125 rows, header_hash=9e46287c"}
+{"ts":"2025-08-24T14:51:42.084777Z","level":"info","phase":"normalizer","msg":"Normalized 115 entries, skipped 10"}
+{"ts":"2025-08-24T14:51:42.084874Z","level":"info","phase":"cli","msg":"Filtered to 6 entries from last 7 days"}
+{"ts":"2025-08-24T14:51:42.084927Z","level":"info","phase":"window","msg":"Window: 6 entries, 7558 chars (budget: 8000)"}
+{"ts":"2025-08-24T14:51:42.085036Z","level":"info","phase":"analyzer","msg":"Starting streaming LLM call (model=deepseek-chat)"}
+... (insight JSON printed / or saved) ...
+{"ts":"2025-08-24T14:52:15.445200Z","level":"info","phase":"cli","msg":"Run 20250824T145139Zce6de6a6b7e68d02 completed successfully. Output: data/insights/run-20250824T145139Zce6de6a6b7e68d02.json","run_id":"20250824T145139Zce6de6a6b7e68d02"}
+```
+
+Phases map to modules: ingestion (`SheetIngester`), normalizer (`EntryNormalizer`), window (`WindowBuilder`), analyzer (`LLMAnalyzer`), persister (`OutputPersister`). All log lines are structured JSON (safe for machine parsing). Warnings (e.g., duplicate headers) indicate recoverable issues.
+
+### Output Artifacts
+
+```text
+data/raw/entries-<run_id>.json      # Full normalized entries used for analysis
+data/insights/run-<run_id>.json     # Insight pack JSON (themes, summaries, question, anomalies)
+data/insights/themes-latest.csv     # Rolling theme counts (overwritten each run)
+data/raw/snapshot_*.json            # Raw pre-normalization snapshot (if enabled)
+```
+
+Insight JSON includes: `dailySummaries`, `themes`, `reflectiveQuestion`, `anomalies`, `hiddenSignals`, `emotionalIndicators`, plus `meta` with version / run provenance.
+
+### Troubleshooting Quick Tips
+
+| Symptom                  | Likely Cause                    | Action                                         |
+| ------------------------ | ------------------------------- | ---------------------------------------------- |
+| Exit 10 (missing ID)     | Wrong flag / env not set        | Provide `--sheet-url` or `--spreadsheet-id`    |
+| Exit 10 (header fail)    | Sheet structure changed         | Align headers in GAS layer / SchemaService     |
+| Exit 20                  | Filter removed all entries      | Increase `--days` or remove filters            |
+| Exit 30                  | LLM transient failure           | Artifact usable; inspect logs & consider retry |
+| Slow analysis            | Large char budget               | Reduce `--char-budget` or shorten window       |
+| Duplicate header warning | Sheet has repeated column names | Rename in sheet; system auto-uniques for run   |
+
+---
+
+---
+
 ## Versioning & Reproducibility
 
 GAS: `CONFIG.VERSIONS.{BEHAVIOR_SCORE,SLEEP_SCORE,ANALYSIS}` + per‑row columns preserve provenance.
