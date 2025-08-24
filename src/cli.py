@@ -112,7 +112,7 @@ def main():
     # If user provided a numeric-only id, it's likely a gid (worksheet/tab), not the spreadsheet id.
     if spreadsheet_id and spreadsheet_id.isdigit():
         logger.error(
-            "Provided ID '%s' looks like a gid (tab id). Supply the full spreadsheetId from the sheet URL (the long mixed-case string).",
+            "Provided ID '%s' looks like a gid (tab id). Use the spreadsheetId from the sheet URL.",
             spreadsheet_id,
         )
         sys.exit(10)
@@ -201,15 +201,16 @@ def main():
     # Validate early to surface misconfiguration
     try:
         config.validate()
-    except Exception as ve:
+    except (ValueError, TypeError, RuntimeError) as ve:
         logger.error("Configuration invalid: %s", ve)
         sys.exit(12)
 
     # Generate run ID
+    now = datetime.now(timezone.utc)
     run_id = (
-        datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        + "_"
-        + hashlib.sha256(str(datetime.now().timestamp()).encode()).hexdigest()[:4]
+        now.strftime("%Y%m%dT%H%M%SZ")
+        + hashlib.sha256(str(datetime.now().timestamp()).encode()).hexdigest()[:12]
+        + hashlib.sha256(str(now.timestamp()).encode()).hexdigest()[:4]
     )
 
     logger.info(

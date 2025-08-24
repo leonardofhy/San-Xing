@@ -85,7 +85,10 @@ class SheetIngester:
         except gspread.exceptions.WorksheetNotFound:
             try:
                 titles = [ws.title for ws in sheet.worksheets()] if "sheet" in locals() else []
-            except Exception:
+            except (gspread.exceptions.GSpreadException, AttributeError) as e:
+                # Narrowed exception handling: handle gspread errors and unexpected attribute issues,
+                # fallback to empty titles and log debug info for investigation.
+                logger.debug("Failed to list worksheets: %s", e)
                 titles = []
             logger.error(
                 "Worksheet '%s' not found. Available worksheets=%s", self.config.TAB_NAME, titles
@@ -99,7 +102,9 @@ class SheetIngester:
                     detail = e.response.json()
                 elif hasattr(e, "response") and hasattr(e.response, "text"):
                     detail = e.response.text
-            except Exception:
+            except (ValueError, AttributeError, TypeError):
+                # JSON decoding, attribute access, or unexpected type errors may occur here;
+                # ignore these specific errors but let other exceptions propagate.
                 pass
             logger.error(
                 "Failed to fetch data (APIError) spreadsheet_id=%s tab=%s error=%s detail=%s",

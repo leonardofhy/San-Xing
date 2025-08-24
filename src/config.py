@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -89,6 +90,9 @@ class Config:
             pass
 
     def validate(self) -> None:
+        """
+        Validate the configuration.
+        """
         errors = []
         if not self.SPREADSHEET_ID:
             errors.append("SHEET_ID missing (provide --sheet-id / --sheet-url / env SHEET_ID).")
@@ -100,22 +104,41 @@ class Config:
             raise ValueError("Config validation errors:\n- " + "\n- ".join(errors))
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert the config to a dictionary.
+
+        Returns:
+            Dict[str, Any]: The config as a dictionary.
+        """
         d = asdict(self)
         # Remove large / derived paths if needed
         return d
 
     @classmethod
     def from_file(cls, path: str | Path, overrides: Optional[Dict[str, Any]] = None) -> "Config":
+        """Load configuration from a file.
+
+        Args:
+            path (str | Path): Path to the configuration file.
+            overrides (Optional[Dict[str, Any]], optional): Overrides for the configuration. Defaults to None.
+
+        Raises:
+            FileNotFoundError: _description_
+            RuntimeError: _description_
+            ValueError: _description_
+
+        Returns:
+            Config: _description_
+        """
         p = Path(path)
         if not p.exists():
             raise FileNotFoundError(f"Config file not found: {p}")
-        if p.suffix.lower() in {".toml", ".tml"}:
+        suffix = p.suffix.lower()
+        if suffix in {".toml", ".tml"}:
             if tomllib is None:
                 raise RuntimeError("tomllib not available (Python <3.11).")
+            # parse TOML content
             data = tomllib.loads(p.read_text(encoding="utf-8"))
-        elif p.suffix.lower() == ".json":
-            import json
-
+        elif suffix == ".json":
             data = json.loads(p.read_text(encoding="utf-8"))
         else:
             raise ValueError("Unsupported config format (use .toml or .json)")

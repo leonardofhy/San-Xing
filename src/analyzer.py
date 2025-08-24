@@ -3,6 +3,7 @@
 import json
 import time
 from typing import List, Dict
+from datetime import datetime, timezone
 import requests
 from .models import DiaryEntry, InsightPack, DailySummary, Theme
 from .config import Config
@@ -33,7 +34,7 @@ class LLMAnalyzer:
                 pack = self._parse_response(response, run_id, len(entries))
                 logger.info("Analysis successful on attempt %d", attempt + 1)
                 return pack
-            except Exception as e:
+            except (requests.exceptions.RequestException, json.JSONDecodeError, KeyError, ValueError) as e:
                 logger.warning("LLM attempt %d failed: %s", attempt + 1, str(e))
                 if attempt < self.config.LLM_MAX_RETRIES - 1:
                     time.sleep(2**attempt)  # Exponential backoff
@@ -99,10 +100,9 @@ class LLMAnalyzer:
         data = response.json()
         content = data["choices"][0]["message"]["content"]
         return json.loads(content)
-
+    
     def _parse_response(self, data: Dict, run_id: str, entries_count: int) -> InsightPack:
         """Parse LLM response into InsightPack"""
-        from datetime import datetime, timezone
 
         # Build meta
         meta = {
@@ -119,10 +119,11 @@ class LLMAnalyzer:
         ]
 
         themes = [
-            Theme(label=t["label"], support=t.get("support", 1))
-            for t in data.get("themes", [])[:5]  # Max 5
+            Theme(label=t.get("label"), support=int(t.get("support", 0)))
+            for t in data.get("themes", [])
         ]
 
+        # Build InsightPack
         return InsightPack(
             meta=meta,
             dailySummaries=daily_summaries,
@@ -134,6 +135,11 @@ class LLMAnalyzer:
             hiddenSignals=data.get("hiddenSignals", []),
             emotionalIndicators=data.get("emotionalIndicators", []),
         )
+
+    def _create_empty_pack(self, run_id: str) -> InsightPack:
+        """Create empty pack when no entries"""
+        return InsightPack.create_fallback(run_id, self.config.VERSION, 0)
+
 
     def _create_empty_pack(self, run_id: str) -> InsightPack:
         """Create empty pack when no entries"""
