@@ -416,3 +416,15 @@ Formatting Rules:
 | ------- | ---------- | ------ | ---------------------------------------------------------------------------- |
 | 0.1.0   | 2025-08-23 | TBD    | Initial SRS draft                                                            |
 | 0.2.0   | 2025-08-23 | TBD    | Lean refactor; core loop, consolidated versioning, fallback JSON, exit codes |
+
+---
+
+## 14. Extensions Pointer
+
+This Phase 0 SRS is intentionally narrow. Extensions are documented in focused addenda to preserve auditability:
+
+| Addendum           | Scope Focus                                                                                                  | Version Anchor         | File                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ | ---------------------- | ---------------------------- |
+| Sleep Metrics (m1) | Deterministic extraction & persistence of sleep (bed/wake/duration/midpoint) plus optional summary injection | VERSION.metrics = "m1" | `SRS_metrics_sleep_phase.md` |
+
+Addenda NEVER retroactively alter contractual definitions here; they layer optional, backward-compatible outputs (e.g., new `meta.sleepSummary`). Breaking or semantic changes require a new version key in the unified version block.
