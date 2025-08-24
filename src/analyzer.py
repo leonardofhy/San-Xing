@@ -201,7 +201,3 @@ class LLMAnalyzer:
     def _create_empty_pack(self, run_id: str) -> InsightPack:
         """Create empty pack when no entries"""
         return InsightPack.create_fallback(run_id, self.config.VERSION, 0)
-
-    def _create_empty_pack(self, run_id: str) -> InsightPack:
-        """Create empty pack when no entries"""
-        return InsightPack.create_fallback(run_id, self.config.VERSION, 0)
