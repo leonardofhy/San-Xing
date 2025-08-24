@@ -61,6 +61,9 @@ def main():
     parser.add_argument("--output-dir", type=Path, default=Path("./data"), help="Output directory")
     parser.add_argument("--char-budget", type=int, default=8000, help="Max chars for LLM window")
     parser.add_argument("--api-key", help="LLM API key (or set LLM_API_KEY env)")
+    parser.add_argument(
+        "--stream", action="store_true", help="Stream LLM tokens to stdout (if provider supports)"
+    )
 
     args = parser.parse_args()
 
@@ -146,6 +149,7 @@ def main():
     llm_model = cfg_get("llm_model", "model")
     llm_timeout = cfg_get("llm_timeout", "timeout")
     llm_max_retries = cfg_get("llm_max_retries", "retries")
+    llm_stream = args.stream or bool(cfg_get("llm_stream", default=False))
 
     # Days/all precedence
     days = args.days if args.days else cfg_get("days")
@@ -194,6 +198,7 @@ def main():
                 llm_max_retries,
                 config.LLM_MAX_RETRIES,
             )
+    config.LLM_STREAM = bool(llm_stream)
     # Recreate dirs if custom output-dir changed
     config.RAW_DIR.mkdir(parents=True, exist_ok=True)
     config.INSIGHTS_DIR.mkdir(parents=True, exist_ok=True)

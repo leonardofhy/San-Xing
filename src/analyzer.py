@@ -1,6 +1,7 @@
 """LLM analysis module"""
 
 import json
+import sys
 import time
 from typing import List, Dict
 from datetime import datetime, timezone
@@ -34,7 +35,12 @@ class LLMAnalyzer:
                 pack = self._parse_response(response, run_id, len(entries))
                 logger.info("Analysis successful on attempt %d", attempt + 1)
                 return pack
-            except (requests.exceptions.RequestException, json.JSONDecodeError, KeyError, ValueError) as e:
+            except (
+                requests.exceptions.RequestException,
+                json.JSONDecodeError,
+                KeyError,
+                ValueError,
+            ) as e:
                 logger.warning("LLM attempt %d failed: %s", attempt + 1, str(e))
                 if attempt < self.config.LLM_MAX_RETRIES - 1:
                     time.sleep(2**attempt)  # Exponential backoff
@@ -73,13 +79,19 @@ class LLMAnalyzer:
 僅輸出最終 JSON，無任何多餘文字。"""
 
     def _call_llm(self, prompt: str) -> Dict:
-        """Call LLM API"""
+        """Call LLM API. Supports optional streaming if config.LLM_STREAM is True.
+
+        Streaming strategy:
+        - If LLM_STREAM enabled, send request with stream=True (OpenAI-compatible) and incrementally write tokens.
+        - Accumulate content; once finished, parse as JSON.
+        - If provider does not support streaming (error or unexpected), fallback to non-streaming.
+        """
         headers = {
             "Authorization": f"Bearer {self.config.LLM_API_KEY}",
             "Content-Type": "application/json",
         }
 
-        payload = {
+        base_payload = {
             "model": self.config.LLM_MODEL,
             "messages": [
                 {
@@ -92,15 +104,65 @@ class LLMAnalyzer:
             "temperature": 0.7,
         }
 
+        if getattr(self.config, "LLM_STREAM", False):
+            try:
+                stream_payload = dict(base_payload)
+                stream_payload["stream"] = True
+                logger.info("Starting streaming LLM call (model=%s)", self.config.LLM_MODEL)
+                with requests.post(
+                    self.config.LLM_ENDPOINT,
+                    headers=headers,
+                    json=stream_payload,
+                    timeout=self.config.LLM_TIMEOUT,
+                    stream=True,
+                ) as r:
+                    r.raise_for_status()
+                    collected = []
+                    for line in r.iter_lines(decode_unicode=True):
+                        if not line:
+                            continue
+                        if line.startswith("data:"):
+                            chunk = line[len("data:") :].strip()
+                            if chunk == "[DONE]":
+                                break
+                            try:
+                                j = json.loads(chunk)
+                                # OpenAI-style delta path
+                                delta = j.get("choices", [{}])[0].get("delta", {})
+                                if "content" in delta:
+                                    token = delta["content"]
+                                    collected.append(token)
+                                    sys.stdout.write(token)
+                                    sys.stdout.flush()
+                            except json.JSONDecodeError:
+                                # Some providers might emit plain text lines; still show them
+                                collected.append(chunk)
+                                sys.stdout.write(chunk)
+                                sys.stdout.flush()
+                    print()  # newline after stream
+                full_content = "".join(collected).strip()
+                # Attempt to locate JSON substring (in case provider prepended commentary despite instructions)
+                json_start = full_content.find("{")
+                json_end = full_content.rfind("}")
+                if json_start == -1 or json_end == -1:
+                    raise ValueError("No JSON object detected in streamed content")
+                parsed = json.loads(full_content[json_start : json_end + 1])
+                return parsed
+            except (requests.RequestException, json.JSONDecodeError, ValueError) as e:  # fallback
+                logger.warning("Streaming failed (%s); falling back to non-streaming mode", e)
+
+        # Non-streaming path
         response = requests.post(
-            self.config.LLM_ENDPOINT, headers=headers, json=payload, timeout=self.config.LLM_TIMEOUT
+            self.config.LLM_ENDPOINT,
+            headers=headers,
+            json=base_payload,
+            timeout=self.config.LLM_TIMEOUT,
         )
         response.raise_for_status()
-
         data = response.json()
         content = data["choices"][0]["message"]["content"]
         return json.loads(content)
-    
+
     def _parse_response(self, data: Dict, run_id: str, entries_count: int) -> InsightPack:
         """Parse LLM response into InsightPack"""
 
@@ -139,7 +201,6 @@ class LLMAnalyzer:
     def _create_empty_pack(self, run_id: str) -> InsightPack:
         """Create empty pack when no entries"""
         return InsightPack.create_fallback(run_id, self.config.VERSION, 0)
-
 
     def _create_empty_pack(self, run_id: str) -> InsightPack:
         """Create empty pack when no entries"""

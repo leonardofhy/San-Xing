@@ -54,6 +54,7 @@ class Config:
     LLM_MODEL: str = "deepseek-reasoner"
     LLM_TIMEOUT: int = 30
     LLM_MAX_RETRIES: int = 2
+    LLM_STREAM: bool = False  # when True, stream tokens to stdout
 
     # Output
     OUTPUT_DIR: Path = Path("./data")
@@ -179,6 +180,7 @@ def _coerce_types(data: Dict[str, Any]) -> Dict[str, Any]:
         "LLM_MAX_RETRIES",
     }
     bool_fields = {"DRY_RUN"}
+    bool_fields.update({"LLM_STREAM"})
     path_fields = {"CREDENTIALS_PATH", "OUTPUT_DIR", "OFFLINE_SNAPSHOT"}
     for f in int_fields:
         if f in data and isinstance(data[f], str) and data[f].isdigit():
