@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test runner for AI Personal Coach
+Test runner for 三省 (SanXing)
 Usage: python run_tests.py --help
 """
 

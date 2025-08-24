@@ -18,11 +18,11 @@ Input Layer → Processing Layer → Insight Layer → Output Layer
 
 ### 1. Temporal Analysis Windows
 
-| Window    | Duration   | Focus Areas                                            | Update Frequency |
-| --------- | ---------- | ------------------------------------------------------ | ---------------- |
-| **Micro** | 3-7 days   | Immediate patterns, mood fluctuations, habit formation | Daily            |
-| **Meso**  | 14-30 days | Behavioral cycles, monthly themes, progress tracking   | Weekly           |
-| **Macro** | 90+ days   | Value evolution, seasonal patterns, long-term growth   | Monthly          |
+| Window | Duration | Focus Areas | Update Frequency |
+|--------|----------|-------------|------------------|
+| **Micro** | 3-7 days | Immediate patterns, mood fluctuations, habit formation | Daily |
+| **Meso** | 14-30 days | Behavioral cycles, monthly themes, progress tracking | Weekly |
+| **Macro** | 90+ days | Value evolution, seasonal patterns, long-term growth | Monthly |
 
 ### 2. Analysis Dimensions
 
@@ -239,4 +239,3 @@ See copilot-instructions.md for development guidelines.
 
 Proprietary - All rights reserved
 
-````

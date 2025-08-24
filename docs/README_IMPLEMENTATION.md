@@ -1,20 +1,23 @@
-# AI Personal Coach - Implementation
+# 三省 (SanXing) - Implementation
 
 Phase 0 implementation of the diary insight engine following the SRS specifications.
 
 ## Quick Start
 
 1. **Install dependencies:**
+
 ```bash
 pip install -r requirements.txt
 ```
 
 2. **Set up Google Sheets API:**
+
    - Create a service account in Google Cloud Console
    - Download credentials JSON file
    - Share your Google Sheet with the service account email
 
 3. **Run analysis:**
+
 ```bash
 python run.py \
   --sheet-id "1CRY53JyLUXdRNDtHRCJwbPMZBo7Azhpowl15-3UigWg" \
@@ -70,6 +73,7 @@ export CREDENTIALS_PATH="/path/to/creds.json"
 ## Development
 
 Run with local snapshot (offline):
+
 ```python
 from src.ingestion import load_cached_snapshot
 records = load_cached_snapshot(Path("data/raw/snapshot_20250823.json"))

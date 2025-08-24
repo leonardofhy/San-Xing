@@ -1,4 +1,4 @@
-# Example configuration for AI Personal Coach
+# Example configuration for 三省 (SanXing)
 # Copy to config.local.toml and edit values, then run:
 #   uv run python -m src.cli --config config.local.toml --days 30
 

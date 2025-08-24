@@ -1,4 +1,4 @@
-"""Configuration module for AI Personal Coach"""
+"""Configuration module for 三省 (SanXing)"""
 
 from __future__ import annotations
 

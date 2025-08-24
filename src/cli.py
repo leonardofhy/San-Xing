@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 
 def main():
     """Main CLI entry point"""
-    parser = argparse.ArgumentParser(description="AI Personal Coach - Diary Insight Engine")
+    parser = argparse.ArgumentParser(description="三省 (SanXing) - Diary Insight Engine")
 
     # Required args
     parser.add_argument(
