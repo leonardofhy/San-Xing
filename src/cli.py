@@ -1,9 +1,13 @@
-"""CLI entry point for the insight engine
+"""CLI entry point for the insight engine.
 
 Enhancements:
- - Optional --config TOML/JSON file (fields: sheet_id, sheet_url, creds, tab, days, all, output_dir, char_budget, api_key)
- - Optional --sheet-url (extracts sheet ID from full Google Sheets URL)
- - Precedence: CLI > env vars > config file > defaults.
+- Optional --config TOML/JSON file (fields:
+    sheet_id, sheet_url, creds, tab, days, all,
+    output_dir, char_budget, api_key)
+- Optional --sheet-url (extracts sheet ID from a full
+    Google Sheets URL)
+- Precedence: CLI > env vars > config file >
+    defaults.
 """
 
 import argparse
@@ -63,6 +67,22 @@ def main():
     parser.add_argument("--api-key", help="LLM API key (or set LLM_API_KEY env)")
     parser.add_argument(
         "--stream", action="store_true", help="Stream LLM tokens to stdout (if provider supports)"
+    )
+    parser.add_argument(
+        "--no-snapshot-dedup",
+        action="store_true",
+        help="Disable content-hash deduplication for raw sheet snapshots (always write new file)",
+    )
+    parser.add_argument(
+        "--export-hf",
+        dest="export_hf",
+        nargs="?",
+        const="data/hf-dataset",
+        metavar="[PATH]",
+        help=(
+            "Export normalized entries as a HuggingFace dataset (save_to_disk). "
+            "Optional PATH (default: data/hf-dataset)."
+        ),
     )
 
     args = parser.parse_args()
@@ -150,15 +170,14 @@ def main():
     llm_timeout = cfg_get("llm_timeout", "timeout")
     llm_max_retries = cfg_get("llm_max_retries", "retries")
     llm_stream = args.stream or bool(cfg_get("llm_stream", default=False))
+    snapshot_dedup_cfg = cfg_get("snapshot_dedup", "SNAPSHOT_DEDUP", default=True)
 
     # Days/all precedence
     days = args.days if args.days else cfg_get("days")
     force_all = args.all or bool(cfg_get("all", default=False))
 
     if not spreadsheet_id:
-        logger.error(
-            "Missing spreadsheet ID (use --spreadsheet-id / --sheet-url or add spreadsheet_id|sheet_id in config)"
-        )
+        logger.error("Missing spreadsheet ID (use --spreadsheet-id, --sheet-url, or config)")
         sys.exit(10)
     if not creds_path:
         logger.error("Missing credentials path (provide --creds or config file entry 'creds')")
@@ -199,6 +218,13 @@ def main():
                 config.LLM_MAX_RETRIES,
             )
     config.LLM_STREAM = bool(llm_stream)
+    # Snapshot dedup (CLI override wins)
+    try:
+        config.SNAPSHOT_DEDUP = str(snapshot_dedup_cfg).lower() not in {"0", "false", "no", "off"}
+    except (AttributeError, ValueError, TypeError):  # pragma: no cover
+        pass
+    if getattr(args, "no_snapshot_dedup", False):
+        config.SNAPSHOT_DEDUP = False
     # Recreate dirs if custom output-dir changed
     config.RAW_DIR.mkdir(parents=True, exist_ok=True)
     config.INSIGHTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -248,6 +274,15 @@ def main():
             cutoff_date = datetime.now().date() - timedelta(days=int(days) - 1)
             entries = [e for e in entries if e.logical_date >= cutoff_date]
             logger.info("Filtered to %d entries from last %s days", len(entries), days)
+
+        # Optional: export HuggingFace dataset (dedup by entry_id)
+        if args.export_hf:
+            try:
+                from .hf_export import export_hf_dataset
+            except ImportError as ie:  # pragma: no cover
+                logger.error("datasets library not installed; add 'datasets' dependency (%s)", ie)
+                sys.exit(1)
+            export_hf_dataset(entries, Path(args.export_hf))
 
         # Detect anomalies
         anomalies = normalizer.detect_anomalies(entries)

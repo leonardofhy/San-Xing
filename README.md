@@ -188,6 +188,8 @@ Precedence: explicit CLI flag > environment variable > config file (`config.loca
 --char-budget N                       Max characters allowed in LLM context window (default 8000)
 --api-key KEY                         LLM API key (alt to env LLM_API_KEY)
 --stream                              Stream LLM tokens to stdout (if provider supports)
+--no-snapshot-dedup                   Disable raw snapshot content-hash dedup (always create new file)
+--export-hf [PATH]                    Export entries as HuggingFace dataset (default: data/hf-dataset)
 ```
 
 ### Environment Variable Aliases
@@ -205,6 +207,7 @@ LLM_MODEL / MODEL                                  → model name
 LLM_TIMEOUT / TIMEOUT                              → request timeout (int seconds)
 LLM_MAX_RETRIES / RETRIES                          → retry attempts (int)
 LLM_STREAM                                         → truthy enables streaming
+SNAPSHOT_DEDUP                                     → set false to disable snapshot deduplication
 OFFLINE_SNAPSHOT                                   → path to reuse a previous snapshot (offline mode)
 DRY_RUN                                            → if truthy, skip external LLM calls when offline
 ```
@@ -289,6 +292,18 @@ fi
    export OFFLINE_SNAPSHOT="data/raw/snapshot_20250824_225142.json"
    export DRY_RUN=true
    uv run python -m src.cli --config config.local.toml --days 7
+   ```
+
+6. Export HuggingFace dataset with default path:
+
+   ```bash
+   uv run python -m src.cli --config config.local.toml --days 7 --export-hf
+   ```
+
+7. Export HuggingFace dataset to custom path:
+
+   ```bash
+   uv run python -m src.cli --config config.local.toml --days 7 --export-hf ./data/my-hf-ds
    ```
 
 ### Sample Log Output (Annotated)

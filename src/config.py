@@ -60,6 +60,7 @@ class Config:
     OUTPUT_DIR: Path = Path("./data")
     RAW_DIR: Path = field(init=False)
     INSIGHTS_DIR: Path = field(init=False)
+    SNAPSHOT_DEDUP: bool = True  # avoid writing duplicate raw sheet snapshots (content-hash)
 
     # Versioning
     VERSION: Dict[str, str] = field(
@@ -181,6 +182,7 @@ def _coerce_types(data: Dict[str, Any]) -> Dict[str, Any]:
     }
     bool_fields = {"DRY_RUN"}
     bool_fields.update({"LLM_STREAM"})
+    bool_fields.update({"SNAPSHOT_DEDUP"})
     path_fields = {"CREDENTIALS_PATH", "OUTPUT_DIR", "OFFLINE_SNAPSHOT"}
     for f in int_fields:
         if f in data and isinstance(data[f], str) and data[f].isdigit():
