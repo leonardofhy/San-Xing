@@ -23,3 +23,6 @@ service_account.json
 
 # Allow the public example config
 !config.example.toml
+
+# Generated data artifacts (snapshots, insights, intermediate JSON)
+data/

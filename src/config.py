@@ -29,7 +29,7 @@ class Config:
     """Central configuration for the insight engine"""
 
     # Google Sheets
-    SHEET_ID: str = os.getenv("SHEET_ID", "")
+    SPREADSHEET_ID: str = os.getenv("SHEET_ID", "")
     CREDENTIALS_PATH: Path = Path(os.getenv("CREDENTIALS_PATH", "")).expanduser()
     TAB_NAME: str = "MetaLog"
     TIMESTAMP_COLUMN: str = "Timestamp"
@@ -78,7 +78,7 @@ class Config:
     OFFLINE_SNAPSHOT: Optional[Path] = None  # reuse a raw snapshot instead of hitting Sheets
 
     def __post_init__(self):
-        self.SHEET_ID = _extract_sheet_id(self.SHEET_ID)
+        self.SPREADSHEET_ID = _extract_sheet_id(self.SPREADSHEET_ID)
         self.OUTPUT_DIR = self.OUTPUT_DIR.expanduser()
         self.RAW_DIR = self.OUTPUT_DIR / "raw"
         self.INSIGHTS_DIR = self.OUTPUT_DIR / "insights"
@@ -90,7 +90,7 @@ class Config:
 
     def validate(self) -> None:
         errors = []
-        if not self.SHEET_ID:
+        if not self.SPREADSHEET_ID:
             errors.append("SHEET_ID missing (provide --sheet-id / --sheet-url / env SHEET_ID).")
         if self.CREDENTIALS_PATH and not self.CREDENTIALS_PATH.exists():
             errors.append(f"Credentials file not found: {self.CREDENTIALS_PATH}")

@@ -11,7 +11,7 @@ max_char_budget = 8000
 
 llm_endpoint = "https://api.deepseek.com/chat/completions"
 llm_model = "deepseek-reasoner"
-llm_timeout = 30
+llm_timeout = 180
 llm_max_retries = 2
 llm_api_key = "sk-..."  # Or set env LLM_API_KEY
 
