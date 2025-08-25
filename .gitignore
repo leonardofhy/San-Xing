@@ -26,3 +26,5 @@ service_account.json
 
 # Generated data artifacts (snapshots, insights, intermediate JSON)
 data/
+
+CLAUDE.md
