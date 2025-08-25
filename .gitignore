@@ -27,4 +27,19 @@ service_account.json
 # Generated data artifacts (snapshots, insights, intermediate JSON)
 data/
 
+# Generated visualization outputs (plots)
+visualization/*.png
+# Explicit plot filenames (in case scripts are run from repo root and output here)
+sleep_duration_trends.png
+sleep_quality_correlation.png
+activities_vs_mood.png
+activity_trends.png
+top_activities.png
+weekly_patterns.png
+health_dashboard.png
+correlation_heatmap.png
+screen_time_vs_sleep.png
+
 CLAUDE.md
+
+visualization/raw_data.json
