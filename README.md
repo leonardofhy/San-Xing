@@ -3,7 +3,7 @@
 > 曾子曰：「吾日三省吾身——為人謀而不忠乎？與朋友交而不信乎？傳不習乎？」
 >
 > — 《論語·學而》
-
+>
 > "Zengzi said: 'I examine myself three times daily: Have I been unfaithful in planning for others? Have I been untrustworthy in my dealings with friends? Have I failed to review what was taught to me?'"
 >
 > — _The Analects of Confucius_, Book 1: _Xue Er_ (Learning and Practice)
@@ -202,7 +202,9 @@ Precedence: explicit CLI flag > environment variable > config file (`config.loca
 --no-snapshot-dedup                   Disable raw snapshot content-hash dedup (always create new file)
 --export-hf [PATH]                    Export entries as HuggingFace dataset (default: data/hf-dataset)
 --upload-hf REPO_ID                   Upload entries to HuggingFace Hub (e.g., "username/dataset")
+--upload-raw                          Upload full raw dataset instead of filtered entries (use with --upload-hf)
 --hf-public                           Make HuggingFace repository public (default: private)
+--hf-format {parquet,json}            Format for HuggingFace dataset export (default: json)
 --process-data [PATH]                 Process data for visualization (default: data/processed)
 ```
 
@@ -320,10 +322,21 @@ fi
    uv run python -m src.cli --config config.local.toml --days 7 --export-hf ./data/my-hf-ds
    ```
 
-8. **Upload to HuggingFace Hub (private by default):**
+8. **Upload to HuggingFace Hub (private, JSON format by default):**
 
+   **Upload filtered entries (last N days):**
    ```bash
    uv run python -m src.cli --config config.local.toml --days 30 --upload-hf "yourusername/san-xing-diary"
+   ```
+
+   **Upload full raw dataset (all data with complete fields like sleep, weight, activities):**
+   ```bash
+   uv run python -m src.cli --config config.local.toml --upload-hf "yourusername/san-xing-diary" --upload-raw
+   ```
+
+   **Use Parquet format:**
+   ```bash
+   uv run python -m src.cli --config config.local.toml --days 30 --upload-hf "yourusername/san-xing-diary" --hf-format parquet
    ```
 
 9. **Process data for visualization:**

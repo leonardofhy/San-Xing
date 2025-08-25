@@ -92,13 +92,25 @@ def main():
         metavar="REPO_ID",
         help=(
             "Upload entries to HuggingFace Hub. Format: 'username/dataset-name'. "
-            "Requires HF_TOKEN environment variable."
+            "Requires hf_token in config or HF_TOKEN environment variable."
         ),
+    )
+    parser.add_argument(
+        "--upload-raw",
+        action="store_true",
+        help="Upload full raw dataset instead of filtered entries (use with --upload-hf)"
     )
     parser.add_argument(
         "--hf-public",
         action="store_true",
         help="Make repository public when uploading to HF Hub (default: private)"
+    )
+    parser.add_argument(
+        "--hf-format",
+        dest="hf_format",
+        choices=["parquet", "json"],
+        default="json",
+        help="Format for HuggingFace dataset export (default: json)"
     )
     parser.add_argument(
         "--process-data",
@@ -339,23 +351,34 @@ def main():
             except ImportError as ie:  # pragma: no cover
                 logger.error("datasets library not installed; add 'datasets' dependency (%s)", ie)
                 sys.exit(1)
-            export_hf_dataset(entries, Path(args.export_hf))
+            export_hf_dataset(entries, Path(args.export_hf), format=args.hf_format)
             
         # Optional: upload to HuggingFace Hub
         if args.upload_hf:
             try:
-                from .hf_export import upload_to_hf_hub
+                if args.upload_raw:
+                    from .hf_export import upload_raw_data_to_hf_hub
+                    # Upload full raw dataset (unfiltered)
+                    repo_url = upload_raw_data_to_hf_hub(
+                        records,  # Use all raw records
+                        args.upload_hf, 
+                        hf_token=config.HF_TOKEN,
+                        private=not args.hf_public,
+                    )
+                    logger.info("Successfully uploaded raw data to: %s", repo_url)
+                else:
+                    from .hf_export import upload_to_hf_hub
+                    # Upload processed entries (filtered by days)
+                    repo_url = upload_to_hf_hub(
+                        entries, 
+                        args.upload_hf, 
+                        hf_token=config.HF_TOKEN,
+                        private=not args.hf_public,
+                    )
+                    logger.info("Successfully uploaded to: %s", repo_url)
             except ImportError as ie:  # pragma: no cover
                 logger.error("datasets/huggingface_hub libraries not installed (%s)", ie)
                 sys.exit(1)
-            try:
-                repo_url = upload_to_hf_hub(
-                    entries, 
-                    args.upload_hf, 
-                    hf_token=config.HF_TOKEN,  # Use token from config
-                    private=not args.hf_public,  # Private by default, use --hf-public to make public
-                )
-                logger.info("Successfully uploaded to: %s", repo_url)
             except Exception as e:
                 logger.error("HuggingFace upload failed: %s", str(e))
                 sys.exit(1)
