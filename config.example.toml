@@ -15,6 +15,9 @@ llm_timeout = 180
 llm_max_retries = 2
 llm_api_key = "sk-..."  # Or set env LLM_API_KEY
 
+# HuggingFace integration (optional)
+hf_token = "hf_..."  # Required for --upload-hf, or set env HF_TOKEN
+
 log_level = "INFO"
 log_format = "json"
 

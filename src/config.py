@@ -56,6 +56,9 @@ class Config:
     LLM_MAX_RETRIES: int = 2
     LLM_STREAM: bool = False  # when True, stream tokens to stdout
 
+    # HuggingFace integration
+    HF_TOKEN: str = os.getenv("HF_TOKEN", "")
+
     # Output
     OUTPUT_DIR: Path = Path("./data")
     RAW_DIR: Path = field(init=False)

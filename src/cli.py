@@ -27,8 +27,10 @@ except (ModuleNotFoundError, ImportError):  # Fallback to tomli if installed
         import tomli as tomllib  # type: ignore
     except (ModuleNotFoundError, ImportError):
         tomllib = None  # Fallback: only JSON supported
+
 from .analyzer import LLMAnalyzer
 from .config import Config
+from .data_processor import DataProcessor
 from .ingestion import SheetIngester
 from .logger import get_logger
 from .normalizer import EntryNormalizer
@@ -82,6 +84,31 @@ def main():
         help=(
             "Export normalized entries as a HuggingFace dataset (save_to_disk). "
             "Optional PATH (default: data/hf-dataset)."
+        ),
+    )
+    parser.add_argument(
+        "--upload-hf",
+        dest="upload_hf",
+        metavar="REPO_ID",
+        help=(
+            "Upload entries to HuggingFace Hub. Format: 'username/dataset-name'. "
+            "Requires HF_TOKEN environment variable."
+        ),
+    )
+    parser.add_argument(
+        "--hf-public",
+        action="store_true",
+        help="Make repository public when uploading to HF Hub (default: private)"
+    )
+    parser.add_argument(
+        "--process-data",
+        dest="process_data",
+        nargs="?",
+        const="data/processed",
+        metavar="[PATH]",
+        help=(
+            "Process raw data for visualization and export to CSV/JSON. "
+            "Optional PATH prefix (default: data/processed)."
         ),
     )
 
@@ -170,6 +197,8 @@ def main():
     llm_timeout = cfg_get("llm_timeout", "timeout")
     llm_max_retries = cfg_get("llm_max_retries", "retries")
     llm_stream = args.stream or bool(cfg_get("llm_stream", default=False))
+    # HuggingFace token (from config file or environment)
+    hf_token = cfg_get("hf_token")
     snapshot_dedup_cfg = cfg_get("snapshot_dedup", "SNAPSHOT_DEDUP", default=True)
 
     # Days/all precedence
@@ -218,6 +247,8 @@ def main():
                 config.LLM_MAX_RETRIES,
             )
     config.LLM_STREAM = bool(llm_stream)
+    if hf_token:
+        config.HF_TOKEN = hf_token
     # Snapshot dedup (CLI override wins)
     try:
         config.SNAPSHOT_DEDUP = str(snapshot_dedup_cfg).lower() not in {"0", "false", "no", "off"}
@@ -275,6 +306,32 @@ def main():
             entries = [e for e in entries if e.logical_date >= cutoff_date]
             logger.info("Filtered to %d entries from last %s days", len(entries), days)
 
+        # Optional: process data for visualization
+        if args.process_data:
+            try:
+                processor = DataProcessor(config)
+                processor.load_from_records(records)
+                df = processor.process_all()
+                
+                if not df.empty:
+                    base_path = Path(args.process_data)
+                    csv_path = Path(f"{base_path}.csv")
+                    json_path = Path(f"{base_path}-analysis.json")
+                    
+                    processor.export_csv(csv_path)
+                    processor.export_analysis_ready(json_path)
+                    
+                    stats = processor.get_summary_stats()
+                    logger.info("Data processing completed. Summary: %d entries, mood avg: %.1f", 
+                               stats.get('total_entries', 0),
+                               stats.get('mood_stats', {}).get('mean', 0) or 0)
+                else:
+                    logger.warning("No data to process for visualization")
+            except ImportError as ie:  # pragma: no cover
+                logger.error("pandas not available for data processing (%s)", ie)
+            except Exception as e:
+                logger.error("Data processing failed: %s", str(e))
+
         # Optional: export HuggingFace dataset (dedup by entry_id)
         if args.export_hf:
             try:
@@ -283,6 +340,25 @@ def main():
                 logger.error("datasets library not installed; add 'datasets' dependency (%s)", ie)
                 sys.exit(1)
             export_hf_dataset(entries, Path(args.export_hf))
+            
+        # Optional: upload to HuggingFace Hub
+        if args.upload_hf:
+            try:
+                from .hf_export import upload_to_hf_hub
+            except ImportError as ie:  # pragma: no cover
+                logger.error("datasets/huggingface_hub libraries not installed (%s)", ie)
+                sys.exit(1)
+            try:
+                repo_url = upload_to_hf_hub(
+                    entries, 
+                    args.upload_hf, 
+                    hf_token=config.HF_TOKEN,  # Use token from config
+                    private=not args.hf_public,  # Private by default, use --hf-public to make public
+                )
+                logger.info("Successfully uploaded to: %s", repo_url)
+            except Exception as e:
+                logger.error("HuggingFace upload failed: %s", str(e))
+                sys.exit(1)
 
         # Detect anomalies
         anomalies = normalizer.detect_anomalies(entries)

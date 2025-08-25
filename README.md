@@ -32,10 +32,12 @@ Python Insight Engine:
 
 - Google Sheet ingestion (service account)
 - Entry normalization & anomaly detection
+- **Data processing for visualization** (mood trends, sleep patterns, activity analysis)
 - Character‑budget window selection for LLM context packing
 - Structured Traditional Chinese LLM prompt → JSON insight pack (dailySummaries, themes, reflectiveQuestion, anomalies, hiddenSignals, emotionalIndicators)
+- **HuggingFace dataset export** (local save_to_disk + Hub upload)
 - Fallback mode if LLM errors (graceful exit codes)
-- Versioned output artifacts (snapshots + insight JSON)
+- Versioned output artifacts (snapshots + insight JSON + visualization CSV)
 
 Shared Concepts:
 
@@ -69,8 +71,10 @@ Key GAS Services:
 Python Core Flow:
 
 ```text
-fetch_rows() → normalize() → detect_anomalies() → build_window() → analyze() → persist()
+fetch_rows() → normalize() → detect_anomalies() → [process_data] → build_window() → analyze() → persist()
 ```
+
+Optional data processing step extracts structured metrics (mood, sleep, activities) for visualization before LLM analysis.
 
 ---
 
@@ -106,9 +110,11 @@ Components:
 
 - `ingestion.py`: Google Sheets fetch + header validation
 - `normalizer.py`: Timestamp parsing, early‑morning adjustment, filtering, anomaly detection
+- `data_processor.py`: Extracts structured metrics for visualization (mood, sleep, activities)
 - `window.py`: Character‑budget constrained selection for prompt context
 - `analyzer.py`: Prompt construction (Traditional Chinese), LLM retries, structured JSON parsing, fallback
 - `persister.py`: Stores snapshots & insight pack; updates `themes-latest.csv`
+- `hf_export.py`: HuggingFace dataset export (local save + Hub upload)
 - `cli.py`: Rich CLI (precedence: CLI > env > config file defaults)
 
 Exit Codes (subset): 0 success | 10 config/validation | 20 no entries | 30 LLM fallback | 1 unexpected
@@ -137,7 +143,10 @@ Prerequisites: Python 3.11+, service account shared with the Google Sheet, DeepS
 
 1. Copy `config.example.toml` → `config.local.toml` and fill values.
 
-1. Install deps (using uv or pip):
+2. **Edit config file for HuggingFace integration (optional):**
+   Add `hf_token = "hf_your_token_here"` to your `config.local.toml` file for HF Hub uploads.
+
+3. Install deps (using uv or pip):
 
 ```bash
 uv sync  # if using uv
@@ -145,16 +154,18 @@ uv sync  # if using uv
 pip install .
 ```
 
-1. Run an insight generation (last 30 days):
+3. Run an insight generation (last 30 days):
 
 ```bash
 uv run python -m src.cli --config config.local.toml --days 30
 ```
 
-1. Outputs land in `data/`:
+4. Outputs land in `data/`:
    - `data/raw/entries-<run_id>.json`
    - `data/insights/run-<run_id>.json`
    - `data/insights/themes-latest.csv`
+   - `data/processed*.csv` (if using `--process-data`)
+   - `data/hf-dataset/` (if using `--export-hf`)
 
 Environment Overrides (examples):
 
@@ -190,6 +201,9 @@ Precedence: explicit CLI flag > environment variable > config file (`config.loca
 --stream                              Stream LLM tokens to stdout (if provider supports)
 --no-snapshot-dedup                   Disable raw snapshot content-hash dedup (always create new file)
 --export-hf [PATH]                    Export entries as HuggingFace dataset (default: data/hf-dataset)
+--upload-hf REPO_ID                   Upload entries to HuggingFace Hub (e.g., "username/dataset")
+--hf-public                           Make HuggingFace repository public (default: private)
+--process-data [PATH]                 Process data for visualization (default: data/processed)
 ```
 
 ### Environment Variable Aliases
@@ -306,6 +320,27 @@ fi
    uv run python -m src.cli --config config.local.toml --days 7 --export-hf ./data/my-hf-ds
    ```
 
+8. **Upload to HuggingFace Hub (private by default):**
+
+   ```bash
+   uv run python -m src.cli --config config.local.toml --days 30 --upload-hf "yourusername/san-xing-diary"
+   ```
+
+9. **Process data for visualization:**
+
+   ```bash
+   uv run python -m src.cli --config config.local.toml --days 30 --process-data data/my-analysis
+   ```
+
+10. **Combined workflow (data processing + HF upload + LLM analysis):**
+
+    ```bash
+    uv run python -m src.cli --config config.local.toml --days 30 \
+      --process-data data/viz \
+      --upload-hf "yourusername/diary" \
+      --stream
+    ```
+
 ### Sample Log Output (Annotated)
 
 Below is a real run (wrapping long lines). Key phases: ingestion → normalization → window → analyze → persist.
@@ -333,6 +368,9 @@ data/raw/entries-<run_id>.json      # Full normalized entries used for analysis
 data/insights/run-<run_id>.json     # Insight pack JSON (themes, summaries, question, anomalies)
 data/insights/themes-latest.csv     # Rolling theme counts (overwritten each run)
 data/raw/snapshot_*.json            # Raw pre-normalization snapshot (if enabled)
+data/processed*.csv                 # Structured data for visualization (if --process-data used)
+data/processed*-analysis.json       # Analysis-ready data with summary statistics
+data/hf-dataset/                    # Local HuggingFace dataset (if --export-hf used)
 ```
 
 Insight JSON includes: `dailySummaries`, `themes`, `reflectiveQuestion`, `anomalies`, `hiddenSignals`, `emotionalIndicators`, plus `meta` with version / run provenance.
@@ -375,9 +413,10 @@ Prompts & outputs (coaching narration) are currently in Traditional Chinese. Int
 ## Privacy & Risk Disclaimer
 
 1. Personal data (behaviors, mood, sleep patterns, free‑form notes, etc.) is transmitted to a third‑party LLM provider (currently DeepSeek) to generate analysis.
-2. Review provider policies before enabling automated calls. You are solely responsible for compliance & data governance.
-3. Do not include highly sensitive information in your source sheet unless you accept associated risks. Consider redacting or hashing sensitive fields.
-4. Keep credentials (service account JSON, API keys) out of version control (`secrets/` is git‑ignored).
+2. **HuggingFace uploads:** Datasets are private by default when uploaded to HF Hub. Use `--hf-public` flag only if you want to make your personal diary data public.
+3. Review provider policies before enabling automated calls. You are solely responsible for compliance & data governance.
+4. Do not include highly sensitive information in your source sheet unless you accept associated risks. Consider redacting or hashing sensitive fields.
+5. Keep credentials (service account JSON, API keys, HF tokens) out of version control (`secrets/` and `config.local.toml` are git‑ignored).
 
 ---
 
@@ -413,7 +452,7 @@ MIT License – see [LICENSE](./LICENSE).
 
 GAS Daily Chain: REPORT_GENERATION_STARTED → DATA_READ_COMPLETED → SCORES_CALCULATED → PROMPT_READY → ANALYSIS_COMPLETED → REPORT_SAVED → REPORT_GENERATION_COMPLETED
 
-Python Run: ingestion → normalization → window → analyze (LLM) → persist (insight JSON + CSV + snapshot)
+Python Run: ingestion → normalization → [data processing] → window → analyze (LLM) → persist (insight JSON + CSV + snapshot)
 
 Early Morning Rule: hour < 3 ⇒ logical date = previous day (consistent across layers).
 
