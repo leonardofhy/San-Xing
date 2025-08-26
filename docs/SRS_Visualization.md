@@ -109,37 +109,35 @@ Dual-source data integration supporting both static JSON files and live Google S
 - Spreadsheet ID configuration
 - Tab name specification (default: "MetaLog")
 
-### 3.2 Health Metrics Dashboard
+### 3.2 Key Performance Indicators (KPIs) Dashboard
 
 #### 3.2.1 Description
-Multi-panel visualization system displaying key health and wellness indicators.
+Simplified KPI system displaying three primary wellness indicators with actionable insights.
 
 #### 3.2.2 Functional Requirements
-- **REQ-3.2.1**: System SHALL display 4 key metric cards (entries, mood, energy, sleep)
-- **REQ-3.2.2**: System SHALL render 6-panel health dashboard with interactive charts
-- **REQ-3.2.3**: System SHALL calculate and display 7-day weight moving average
-- **REQ-3.2.4**: System SHALL show mood vs energy correlation with coefficient
-- **REQ-3.2.5**: System SHALL handle missing data gracefully with appropriate indicators
+- **REQ-3.2.1**: System SHALL display 3 primary KPI cards (Wellbeing Score, Balance Index, Trend Indicator)
+- **REQ-3.2.2**: System SHALL calculate composite Wellbeing Score from mood, energy, and sleep quality
+- **REQ-3.2.3**: System SHALL compute Balance Index from activity balance and sleep goal achievement
+- **REQ-3.2.4**: System SHALL determine 7-day trend direction with statistical significance
+- **REQ-3.2.5**: System SHALL display top 3 statistically significant insights below KPIs
+- **REQ-3.2.6**: System SHALL handle missing data gracefully with confidence indicators
 
-#### 3.2.3 Dashboard Panels
-1. **Daily Mood Levels**: Time series with 1-10 scale
-2. **Daily Energy Levels**: Time series with 1-10 scale  
-3. **Screen Time**: Daily usage hours over time
-4. **Weight Trends**: Raw data with 7-day moving average overlay
-5. **Sleep Quality**: Time series with 1-10 quality scale
-6. **Mood vs Energy**: Scatter plot with correlation analysis
+#### 3.2.3 KPI Definitions
+1. **Wellbeing Score**: Composite metric (mood × 0.4 + energy × 0.4 + sleep_quality × 0.2)
+2. **Balance Index**: Activity balance achievement + sleep duration goal percentage
+3. **Trend Indicator**: 7-day moving direction with confidence level (improving/stable/declining)
 
-### 3.3 Activity Analysis System
+### 3.3 Activity Impact Analysis
 
 #### 3.3.1 Description
-Comprehensive activity pattern analysis with categorization and trend visualization.
+Focused activity analysis showing statistical relationships between activities and wellbeing outcomes.
 
 #### 3.3.2 Functional Requirements
 - **REQ-3.3.1**: System SHALL categorize activities into positive, neutral, and negative types
 - **REQ-3.3.2**: System SHALL calculate activity balance score (positive - negative)
-- **REQ-3.3.3**: System SHALL display activity trends over time as stacked area chart
-- **REQ-3.3.4**: System SHALL show correlation between activity balance and mood
-- **REQ-3.3.5**: System SHALL generate top 10 most common activities ranking
+- **REQ-3.3.3**: System SHALL identify top 3 activities with strongest correlation to next-day mood/energy
+- **REQ-3.3.4**: System SHALL display only statistically significant activity-outcome relationships
+- **REQ-3.3.5**: System SHALL show activity impact summary with confidence levels
 - **REQ-3.3.6**: System SHALL handle both string and list activity data formats
 
 #### 3.3.3 Activity Categories
@@ -171,21 +169,22 @@ Sleep pattern tracking with duration analysis and quality correlation.
 - **Recommendations**: 7-hour minimum, 8-hour optimal guidelines
 - **Energy Correlation**: Sleep impact on next-day energy levels
 
-### 3.5 Correlation Analysis System
+### 3.5 Actionable Insights System
 
 #### 3.5.1 Description
-Interactive correlation matrix for identifying relationships between health metrics.
+Statistical analysis system that identifies and presents top 3 actionable insights with confidence levels.
 
 #### 3.5.2 Functional Requirements
-- **REQ-3.5.1**: System SHALL generate correlation matrix for all numeric health metrics
-- **REQ-3.5.2**: System SHALL display correlation heatmap with color-coded strength
-- **REQ-3.5.3**: System SHALL handle missing data in correlation calculations
-- **REQ-3.5.4**: System SHALL provide interactive correlation visualization
+- **REQ-3.5.1**: System SHALL identify statistically significant relationships (p < 0.05) between metrics
+- **REQ-3.5.2**: System SHALL rank insights by effect size and practical significance
+- **REQ-3.5.3**: System SHALL display only top 3 most actionable insights
+- **REQ-3.5.4**: System SHALL include confidence levels and sample sizes for each insight
+- **REQ-3.5.5**: System SHALL provide plain-language interpretation of statistical findings
 
-#### 3.5.3 Analyzed Metrics
-- Mood, Energy, Sleep Quality, Sleep Duration
-- Weight, Screen Time
-- Positive Activities, Negative Activities, Activity Balance
+#### 3.5.3 Insight Categories
+- **Activity Impact**: "Your mood increases X points when you do Y activity"
+- **Sleep Optimization**: "Your energy peaks at X hours of sleep (Z% confidence)"
+- **Behavioral Patterns**: "Screen time above X hours reduces next-day wellbeing by Y%"
 
 ### 3.6 User Interface System
 
@@ -205,17 +204,26 @@ Streamlit-based web interface with responsive design and interactive controls.
 ┌─────────────────────────────────────────────────────────┐
 │  Header: San-Xing Dashboard Title                       │
 ├─────────────────────────────────────────────────────────┤
-│  Overview: Key Metrics Cards (4 columns)               │
+│  Primary KPIs (3 cards)                                │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐                  │
+│  │Wellbeing│ │Balance  │ │Trend    │                  │
+│  │Score 7.2│ │Index 85%│ │↗ +0.3   │                  │
+│  └─────────┘ └─────────┘ └─────────┘                  │
 ├─────────────────────────────────────────────────────────┤
-│  Tabs: [Health] [Activities] [Sleep] [Correlations]    │
+│  Top 3 Actionable Insights (Rotated)                   │
+│  • "Your energy peaks with 7.5h sleep (87% confidence)"│
+│  • "Outdoor activities increase mood by 1.3 points"    │
+│  • "Screen time >5h reduces next-day wellbeing by 15%" │
+├─────────────────────────────────────────────────────────┤
+│  Drill-down Tabs: [Sleep] [Activities] [Patterns]      │
 │  ┌─────────────────────────────────────────────────────┐ │
-│  │  Tab Content Area                                   │ │
-│  │  - Interactive Charts                               │ │
-│  │  - Data Visualizations                              │ │
-│  │  - Statistical Summaries                            │ │
+│  │  Expandable Detail Views                            │ │
+│  │  - Statistical Analysis                             │ │
+│  │  - Confidence Intervals                             │ │
+│  │  - Historical Context                               │ │
 │  └─────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────┤
-│  Sidebar: Settings, Filters, Controls                  │
+│  Sidebar: Settings, Filters, Data Source               │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -442,10 +450,11 @@ CMD ["streamlit", "run", "visualization/dashboard.py", "--server.address", "0.0.
 
 ### 10.1 Functional Acceptance
 - Dashboard loads successfully with sample data
-- All 4 main tabs render without errors
+- 3 primary KPIs display correctly with proper calculations
+- Top 3 actionable insights appear with confidence levels
 - Data source switching works correctly
-- Date filtering updates visualizations
-- Charts are interactive with hover information
+- Date filtering updates KPIs and insights
+- Statistical significance testing filters irrelevant correlations
 - Google Sheets integration functions when configured
 - Error states display appropriate messages
 
@@ -456,10 +465,11 @@ CMD ["streamlit", "run", "visualization/dashboard.py", "--server.address", "0.0.
 - Memory usage remains under 1GB for typical datasets
 
 ### 10.3 User Experience Acceptance
-- Interface is intuitive without training
-- Responsive design works on tablet devices
-- Error messages are clear and actionable
-- All features accessible within 3 clicks
+- Primary insights visible without scrolling or clicks
+- KPIs provide immediate understanding of wellbeing status
+- Insights are actionable and include confidence levels
+- Interface reduces cognitive load compared to multi-chart approach
+- Drill-down details available for users wanting deeper analysis
 
 ---
 
