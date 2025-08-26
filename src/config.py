@@ -186,7 +186,7 @@ def _coerce_types(data: Dict[str, Any]) -> Dict[str, Any]:
     bool_fields = {"DRY_RUN"}
     bool_fields.update({"LLM_STREAM"})
     bool_fields.update({"SNAPSHOT_DEDUP"})
-    path_fields = {"CREDENTIALS_PATH", "OUTPUT_DIR", "OFFLINE_SNAPSHOT"}
+    path_fields = {"CREDENTIALS_PATH", "OUTPUT_DIR", "OFFLINE_SNAPSHOT", "credentials_path", "output_dir", "offline_snapshot"}
     for f in int_fields:
         if f in data and isinstance(data[f], str) and data[f].isdigit():
             data[f] = int(data[f])
@@ -196,6 +196,39 @@ def _coerce_types(data: Dict[str, Any]) -> Dict[str, Any]:
     for f in path_fields:
         if f in data and data[f]:
             data[f] = Path(str(data[f])).expanduser()
+    # Handle spreadsheet_id -> SPREADSHEET_ID mapping
+    if "spreadsheet_id" in data:
+        data["SPREADSHEET_ID"] = _extract_sheet_id(str(data["spreadsheet_id"]))
+        data.pop("spreadsheet_id", None)  # Remove the lowercase version
     if "SHEET_ID" in data:
-        data["SHEET_ID"] = _extract_sheet_id(str(data["SHEET_ID"]))
+        data["SPREADSHEET_ID"] = _extract_sheet_id(str(data["SHEET_ID"]))
+        
+    # Handle other field mappings
+    field_mappings = {
+        "sheet_id": "SPREADSHEET_ID",  # Legacy support
+        "credentials_path": "CREDENTIALS_PATH", 
+        "tab_name": "TAB_NAME",
+        "min_diary_length": "MIN_DIARY_LENGTH",
+        "default_days_window": "DEFAULT_DAYS_WINDOW", 
+        "max_char_budget": "MAX_CHAR_BUDGET",
+        "llm_endpoint": "LLM_ENDPOINT",
+        "llm_model": "LLM_MODEL",
+        "llm_timeout": "LLM_TIMEOUT",
+        "llm_max_retries": "LLM_MAX_RETRIES",
+        "llm_api_key": "LLM_API_KEY",
+        "llm_stream": "LLM_STREAM",
+        "hf_token": "HF_TOKEN",
+        "log_level": "LOG_LEVEL",
+        "log_format": "LOG_FORMAT",
+        "dry_run": "DRY_RUN",
+        "output_dir": "OUTPUT_DIR",
+        "snapshot_dedup": "SNAPSHOT_DEDUP"
+    }
+    
+    # Apply field mappings
+    for old_key, new_key in field_mappings.items():
+        if old_key in data:
+            data[new_key] = data[old_key]
+            data.pop(old_key, None)  # Remove the old key
+    
     return data

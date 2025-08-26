@@ -23,6 +23,7 @@ dev = [
   "black>=24.0.0",
   "flake8>=6.0.0",
   "pyclean>=3.1.0",
+  "watchdog>=3.0.0",
 ]
 
 [tool.black]

@@ -25,15 +25,15 @@ def main():
     
     has_data = any(p.exists() for p in data_paths)
     if not has_data:
-        print("⚠️  Warning: No visualization data found.")
-        print("💡 Generate data first:")
-        print("   • For JSON: cd visualization && python download_data.py")
-        print("   • For CSV: uv run python -m src.cli --process-data --days 30")
+        print("Warning: No visualization data found.")
+        print("Generate data first:")
+        print("   - For JSON: cd visualization && python download_data.py")
+        print("   - For CSV: uv run python -m src.cli --process-data --days 30")
         print()
     
-    print("🚀 Starting San-Xing Interactive Dashboard...")
-    print("📊 Dashboard URL: http://localhost:8501")
-    print("🔄 Press Ctrl+C to stop")
+    print("Starting San-Xing Interactive Dashboard...")
+    print("Dashboard URL: http://localhost:8501")
+    print("Press Ctrl+C to stop")
     print("-" * 50)
     
     try:
@@ -44,9 +44,9 @@ def main():
             "--server.headless", "true"
         ])
     except KeyboardInterrupt:
-        print("\n👋 Dashboard stopped.")
+        print("\nDashboard stopped.")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
         sys.exit(1)
 
 

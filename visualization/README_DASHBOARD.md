@@ -16,8 +16,7 @@ A Streamlit-based web dashboard for visualizing your San-Xing personal analytics
 ### 1. Install Dependencies
 
 ```bash
-# From the visualization directory
-cd visualization
+# From the main San-Xing directory (not visualization subdirectory)
 uv sync
 ```
 
@@ -37,7 +36,11 @@ python download_data.py
 ### 3. Run the Dashboard
 
 ```bash
-uv run streamlit run dashboard.py
+# From the main directory
+uv run python run_dashboard.py
+
+# OR directly with streamlit
+uv run streamlit run visualization/dashboard.py
 ```
 
 The dashboard will be available at: `http://localhost:8501`

@@ -90,8 +90,16 @@ def load_data_from_sheets() -> pd.DataFrame:
         st.error("San-Xing source modules not available. Using JSON fallback.")
         return pd.DataFrame()
     
+    import os
+    
+    # Change to the main San-Xing directory for relative paths to work
+    original_cwd = os.getcwd()
+    main_dir = Path(__file__).parent.parent
+    
     try:
-        config_path = Path(__file__).parent.parent / "config.local.toml"
+        os.chdir(main_dir)
+        
+        config_path = main_dir / "config.local.toml"
         if not config_path.exists():
             st.error("config.local.toml not found. Please set up configuration.")
             return pd.DataFrame()
@@ -100,26 +108,101 @@ def load_data_from_sheets() -> pd.DataFrame:
         processor = DataProcessor(config)
         
         # Load from latest snapshot or fetch fresh data
-        snapshot_dir = Path(config.output_dir) / "raw"
+        snapshot_dir = config.RAW_DIR
         latest_snapshot = None
         
         if snapshot_dir.exists():
+            # First try to find actual snapshot files (not reference files)
             snapshots = list(snapshot_dir.glob("snapshot_*.json"))
-            if snapshots:
+            # Filter out reference files like snapshot_latest.json
+            data_snapshots = [s for s in snapshots if not s.name.endswith('_latest.json')]
+            
+            if data_snapshots:
+                latest_snapshot = max(data_snapshots, key=lambda p: p.stat().st_mtime)
+            elif snapshots:
+                # Fallback to any snapshot file
                 latest_snapshot = max(snapshots, key=lambda p: p.stat().st_mtime)
         
         if latest_snapshot:
             processor.load_from_snapshot(latest_snapshot)
+            return processor.process_all()
         else:
-            # Would need to implement fresh data fetch
-            st.warning("No snapshot found. Using JSON fallback.")
-            return pd.DataFrame()
-        
-        return processor.process_all()
+            # Try to fetch fresh data using ingestion
+            try:
+                from src.ingestion import SheetIngester
+                from src.normalizer import EntryNormalizer
+                
+                ingester = SheetIngester(config)
+                normalizer = EntryNormalizer(config)
+                
+                # Fetch and normalize data
+                raw_rows = ingester.fetch_rows()
+                entries = normalizer.normalize(raw_rows)
+                
+                if not entries:
+                    st.warning("No valid entries found in sheets.")
+                    return pd.DataFrame()
+                
+                # Convert entries to records format for processor
+                records = []
+                for entry in entries:
+                    # Convert DiaryEntry back to dict format
+                    record = {
+                        "Timestamp": entry.timestamp.strftime("%d/%m/%Y %H:%M:%S"),
+                        "今天想記點什麼？": entry.diary_text,
+                        **entry.metadata
+                    }
+                    records.append(record)
+                
+                processor.load_from_records(records)
+                return processor.process_all()
+                
+            except Exception as fetch_error:
+                st.warning(f"Could not fetch fresh data: {fetch_error}. No snapshot available.")
+                return pd.DataFrame()
         
     except Exception as e:
         st.error(f"Error loading from sheets: {e}")
         return pd.DataFrame()
+    finally:
+        # Always restore original working directory
+        os.chdir(original_cwd)
+
+
+def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize column names between different data sources (JSON vs DataProcessor)."""
+    if df.empty:
+        return df
+    
+    # Create a copy to avoid modifying the original
+    df = df.copy()
+    
+    # Column mappings from DataProcessor to dashboard expected names
+    column_mappings = {
+        'timestamp': 'date',
+        'mood_level': 'mood',
+        'energy_level': 'energy', 
+        'sleep_quality': 'sleep_quality',  # Keep same name
+        'weight': 'weight',  # Keep same name
+        'screen_time': 'screen_time',  # Keep same name
+        'completed_activities': '今天完成了哪些？',
+        'diary_text': '今天想記點什麼？',
+        'positive_activities': 'positive_activities',  # Keep same name
+        'negative_activities': 'negative_activities',  # Keep same name
+        'activity_balance': 'activity_balance',  # Keep same name
+        'sleep_duration_hours': 'sleep_duration'
+    }
+    
+    # Apply column mappings
+    for old_col, new_col in column_mappings.items():
+        if old_col in df.columns and new_col not in df.columns:
+            df[new_col] = df[old_col]
+    
+    # Ensure date column is datetime
+    if 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    
+    return df
 
 
 def process_health_metrics(df: pd.DataFrame) -> pd.DataFrame:
@@ -127,15 +210,27 @@ def process_health_metrics(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
     
-    # Basic health metrics
-    df['mood'] = pd.to_numeric(df.get('今日整體心情感受', pd.Series()), errors='coerce')
-    df['energy'] = pd.to_numeric(df.get('今日整體精力水平如何？', pd.Series()), errors='coerce')
-    df['sleep_quality'] = pd.to_numeric(df.get('昨晚睡眠品質如何？', pd.Series()), errors='coerce')
-    df['weight'] = pd.to_numeric(df.get('體重紀錄', pd.Series()), errors='coerce')
-    df['screen_time'] = pd.to_numeric(df.get('今日手機螢幕使用時間', pd.Series()), errors='coerce')
+    # Normalize columns first
+    df = normalize_dataframe_columns(df)
+    
+    # Handle different data sources (JSON vs DataProcessor)
+    if 'mood' not in df.columns:
+        # JSON source - extract from Chinese column names
+        df['mood'] = pd.to_numeric(df.get('今日整體心情感受', pd.Series()), errors='coerce')
+        df['energy'] = pd.to_numeric(df.get('今日整體精力水平如何？', pd.Series()), errors='coerce')
+        df['sleep_quality'] = pd.to_numeric(df.get('昨晚睡眠品質如何？', pd.Series()), errors='coerce')
+        df['weight'] = pd.to_numeric(df.get('體重紀錄', pd.Series()), errors='coerce')
+        df['screen_time'] = pd.to_numeric(df.get('今日手機螢幕使用時間', pd.Series()), errors='coerce')
+    
+    # Ensure numeric types for existing columns
+    numeric_columns = ['mood', 'energy', 'sleep_quality', 'weight', 'screen_time']
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
     
     # Calculate weight moving average
-    df['weight_ma'] = df['weight'].rolling(window=7, min_periods=1).mean()
+    if 'weight' in df.columns:
+        df['weight_ma'] = df['weight'].rolling(window=7, min_periods=1).mean()
     
     return df
 
@@ -171,14 +266,19 @@ def process_sleep_data(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
     
-    # Parse sleep times
-    df['bedtime'] = df.get('昨晚實際入睡時間', pd.Series()).apply(parse_time)
-    df['wake_time'] = df.get('今天實際起床時間', pd.Series()).apply(parse_time)
+    # Normalize columns first
+    df = normalize_dataframe_columns(df)
     
-    # Calculate sleep duration
-    df['sleep_duration'] = df.apply(
-        lambda row: calc_sleep_duration(row.get('bedtime'), row.get('wake_time')), axis=1
-    )
+    # Check if we need to process raw sleep times or if duration is already calculated
+    if 'sleep_duration' not in df.columns:
+        # Parse sleep times from raw data (JSON source)
+        df['bedtime'] = df.get('昨晚實際入睡時間', pd.Series()).apply(parse_time)
+        df['wake_time'] = df.get('今天實際起床時間', pd.Series()).apply(parse_time)
+        
+        # Calculate sleep duration
+        df['sleep_duration'] = df.apply(
+            lambda row: calc_sleep_duration(row.get('bedtime'), row.get('wake_time')), axis=1
+        )
     
     return df
 
@@ -188,6 +288,17 @@ def process_activities(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
     
+    # Normalize columns first
+    df = normalize_dataframe_columns(df)
+    
+    # If activity counts are already calculated (DataProcessor source), use them
+    if 'positive_activities' in df.columns and 'negative_activities' in df.columns:
+        # Activity balance might already be calculated too
+        if 'activity_balance' not in df.columns:
+            df['activity_balance'] = df['positive_activities'] - df['negative_activities']
+        return df
+    
+    # Otherwise, calculate from raw activities (JSON source)
     # Define activity categories
     positive_activities = [
         '英文學習', '閱讀論文', '看書', '戶外活動', '實體社交活動', 
@@ -432,10 +543,22 @@ def render_activity_analysis(df: pd.DataFrame):
         st.subheader("Top Activities")
         all_activities = []
         
-        for activities_str in df['今天完成了哪些？'].dropna():
-            if activities_str and activities_str.strip():
-                activities = [act.strip() for act in str(activities_str).split(',')]
-                all_activities.extend(activities)
+        for activities_data in df['今天完成了哪些？'].dropna():
+            if activities_data:
+                # Handle both string (JSON source) and list (DataProcessor source) formats
+                if isinstance(activities_data, str):
+                    if activities_data.strip():
+                        activities = [act.strip() for act in activities_data.split(',')]
+                        all_activities.extend(activities)
+                elif isinstance(activities_data, list):
+                    # Already a list from DataProcessor
+                    all_activities.extend(activities_data)
+                else:
+                    # Convert other types to string and split
+                    activities_str = str(activities_data)
+                    if activities_str.strip():
+                        activities = [act.strip() for act in activities_str.split(',')]
+                        all_activities.extend(activities)
         
         if all_activities:
             activity_counts = Counter(all_activities)

@@ -59,7 +59,7 @@ def generate_sample_data(num_days: int = 30) -> list:
 
 def main():
     """Generate and save sample data."""
-    print("🔄 Generating sample San-Xing data...")
+    print("Generating sample San-Xing data...")
     
     # Generate 30 days of sample data
     sample_data = generate_sample_data(30)
@@ -69,9 +69,9 @@ def main():
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(sample_data, f, ensure_ascii=False, indent=2)
     
-    print(f"✅ Generated {len(sample_data)} sample entries")
-    print(f"📁 Saved to: {output_path}")
-    print(f"🚀 Now run: uv run python run_dashboard.py")
+    print(f"Generated {len(sample_data)} sample entries")
+    print(f"Saved to: {output_path}")
+    print(f"Now run: uv run python run_dashboard.py")
 
 
 if __name__ == "__main__":
