@@ -80,7 +80,6 @@ def load_real_data_option() -> pd.DataFrame:
     """Try to load real Google Sheets data if available"""
     try:
         import sys
-        import toml
         from pathlib import Path
         
         # Add parent directory to path
@@ -90,15 +89,12 @@ def load_real_data_option() -> pd.DataFrame:
         from src.data_processor import DataProcessor
         from src.config import Config
         
-        # Load configuration
+        # Load configuration using the proper Config.from_file method
         config_path = parent_dir / "config.local.toml"
         if not config_path.exists():
             return None
             
-        with open(config_path, 'r') as f:
-            config_dict = toml.load(f)
-        
-        config = Config(**config_dict)
+        config = Config.from_file(config_path)
         
         # Load latest snapshot
         snapshot_path = parent_dir / "data" / "raw" / "snapshot_010f189dd4de4959.json"

@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 import json
-import toml
 
 # Add parent directory to path to import San-Xing modules
 parent_dir = Path(__file__).parent.parent
@@ -99,12 +98,9 @@ st.markdown("""
 def load_real_data():
     """Load and process real Google Sheets data"""
     try:
-        # Load configuration
+        # Load configuration using the proper Config.from_file method
         config_path = parent_dir / "config.local.toml"
-        with open(config_path, 'r') as f:
-            config_dict = toml.load(f)
-        
-        config = Config(**config_dict)
+        config = Config.from_file(config_path)
         
         # Load latest snapshot
         snapshot_path = parent_dir / "data" / "raw" / "snapshot_010f189dd4de4959.json"
