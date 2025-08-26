@@ -1,0 +1,9 @@
+# San-Xing Dashboard Requirements
+# For deployment to Streamlit Cloud, Heroku, etc.
+
+streamlit>=1.32.0
+pandas>=2.0.0
+plotly>=5.17.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+requests>=2.31.0
