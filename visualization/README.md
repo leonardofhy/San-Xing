@@ -1,124 +1,96 @@
-# San-Xing Data Visualization
+# San-Xing Visualization Dashboard
 
-Data visualization tools for analyzing San-Xing diary data exported from HuggingFace.
+## 🎯 Simplified Structure
 
-## Setup
+The visualization module has been cleaned up and now contains only essential files:
 
-1. Initialize the uv environment:
+### 📊 Main Dashboard
+- **`dashboard.py`** - Main dashboard with robust data loading and fallbacks
+- **`launch_dashboard.py`** - Simple launcher script
+- **`robust_data_loader.py`** - Reliable data loading utilities
 
-```bash
-cd visualization
-uv sync
-```
+### 🧩 Core Modules
+- **`analytics/`** - KPI calculations and statistical analysis
+  - `kpi_calculator.py` - Wellbeing score, balance index, trend analysis
+  - `statistical_utils.py` - Correlation testing, significance analysis
+  - `insight_engine.py` - Advanced pattern recognition
+  
+- **`components/`** - Reusable UI components
+  - `kpi_cards.py` - KPI display cards
+  - `insight_display.py` - Statistical insights and correlations
+  - `data_viz.py` - Interactive charts and visualizations
+  - `drill_down_views.py` - Detailed analysis views
 
-2. Download your data:
+### 🧪 Testing
+- **`tests/`** - Comprehensive test suite
+  - `test_kpi_calculator.py` - KPI calculation tests
+  - `test_statistical_utils.py` - Statistical function tests  
+  - `test_ui_components.py` - UI component tests
 
-```bash
-uv run python download_data.py
-```
+### 📋 Documentation
+- **`DATA_LOADING_ANALYSIS.md`** - Technical analysis of data loading solutions
+- **`README.md`** - This file
 
-## Available Analyses
-
-### Sleep Analysis (`sleep_analysis.py`)
-
-- Sleep duration trends over time
-- Sleep quality correlation with duration and energy
-- Sleep statistics summary
-- Generates: `sleep_duration_trends.png`, `sleep_quality_correlation.png`
-
-### Health Dashboard (`health_dashboard.py`)
-
-- Multi-factor health dashboard (mood, energy, weight, screen time, sleep quality)
-- Correlation heatmap between all health metrics
-- Screen time vs sleep quality analysis
-- Generates: `health_dashboard.png`, `correlation_heatmap.png`, `screen_time_vs_sleep.png`
-
-### Activity Analysis (`activity_analysis.py`)
-
-- Activity categorization (positive, neutral, negative)
-- Activity vs mood correlation
-- Most common activities frequency
-- Weekly activity patterns by day of week
-- Generates: `activities_vs_mood.png`, `activity_trends.png`, `top_activities.png`, `weekly_patterns.png`
-
-## Usage
-
-Run individual analyses:
+## 🚀 Quick Start
 
 ```bash
-# Sleep patterns
-uv run python sleep_analysis.py
+# Launch the dashboard
+cd /Users/leonardo/Workspace/San-Xing
+python visualization/launch_dashboard.py
 
-# Comprehensive health dashboard
-uv run python health_dashboard.py
-
-# Activity and mood analysis
-uv run python activity_analysis.py
+# Or run directly
+uv run streamlit run visualization/dashboard.py
 ```
 
-Or run all analyses (from project root or inside visualization/):
+## 🛡️ Features
+
+### Bulletproof Data Loading
+- **Real Google Sheets data** when available
+- **Intelligent fallbacks** to synthetic data when needed
+- **Never crashes** - always displays functional dashboard
+- **Clear status indicators** showing data source
+
+### Comprehensive Analytics
+- **KPI Calculations**: Wellbeing score, balance index, trend analysis
+- **Statistical Rigor**: Correlation testing with significance analysis
+- **Interactive Visualizations**: Trends, distributions, correlation matrices
+- **Drill-down Analysis**: Sleep, activity, and pattern analysis
+
+### Robust Architecture
+- **Component-based design** for maintainability
+- **Comprehensive error handling** with graceful degradation
+- **Full test coverage** ensuring reliability
+- **Modular structure** for easy extension
+
+## 🧪 Testing
 
 ```bash
-# From project root
-uv run python visualization/run_all.py
-
-# Or inside visualization directory
-cd visualization
-uv run python run_all.py
+# Run all tests
+cd /Users/leonardo/Workspace/San-Xing
+uv run pytest visualization/tests/ -v
 ```
 
-## Generated Files
+## 📈 Data Sources
 
-All visualizations are saved as high-resolution PNG files:
+The dashboard intelligently handles multiple data sources:
 
-**Sleep Analysis:**
+1. **Primary**: Real Google Sheets data from Meta-Awareness Log
+2. **Fallback**: High-quality synthetic data with realistic patterns  
+3. **Emergency**: Basic synthetic data if all else fails
 
-- `sleep_duration_trends.png` - Sleep duration over time with recommended hours
-- `sleep_quality_correlation.png` - Sleep duration vs quality with energy levels
+Users always know which data source is active through clear UI indicators.
 
-**Health Dashboard:**
+## 🔧 Architecture
 
-- `health_dashboard.png` - 6-panel comprehensive health overview
-- `correlation_heatmap.png` - Correlation matrix of all health metrics
-- `screen_time_vs_sleep.png` - Digital wellness analysis
-
-**Activity Analysis:**
-
-- `activities_vs_mood.png` - Activity categories vs mood correlation
-- `activity_trends.png` - Activity types over time (stacked area)
-- `top_activities.png` - Most frequently performed activities
-- `weekly_patterns.png` - Activity and mood patterns by day of week
-
-## Data Format
-
-The scripts expect `raw_data.json` containing your HuggingFace dataset with fields:
-
-- `Timestamp` - Entry timestamp
-- `昨晚實際入睡時間` - Bedtime (HHMM format)
-- `今天實際起床時間` - Wake time (HHMM format)
-- `昨晚睡眠品質如何？` - Sleep quality (1-10)
-- `今日整體心情感受` - Daily mood (1-10)
-- `今日整體精力水平如何？` - Energy level (1-10)
-- `體重紀錄` - Weight records
-- `今日手機螢幕使用時間` - Daily screen time
-- `今天完成了哪些？` - Daily activities (comma-separated)
-
-## Requirements
-
-- Python 3.11+
-- pandas >= 2.0.0
-- matplotlib >= 3.7.0
-- seaborn >= 0.12.0
-- plotly >= 5.17.0
-- requests >= 2.31.0
-
-### Non-blocking / Headless Mode
-
-Plots are generated and saved without opening GUI windows by default. To enable interactive windows, set:
-
-```bash
-export SHOW_PLOTS=1
-uv run python visualization/health_dashboard.py
+```
+visualization/
+├── dashboard.py                # Main dashboard (robust & reliable)
+├── launch_dashboard.py         # Simple launcher
+├── robust_data_loader.py       # Data loading utilities
+├── analytics/                  # Core analytics
+├── components/                 # UI components  
+├── tests/                      # Test suite
+└── data/                       # Generated visualizations
 ```
 
-Unset (or leave blank) to keep headless behavior.
+This simplified structure focuses on the essential components while maintaining full functionality and reliability.

@@ -1,37 +1,45 @@
 #!/usr/bin/env python3
 """
-San-Xing (三省) Interactive Dashboard
-Streamlit-based web dashboard for personal analytics and insights
+Bulletproof San-Xing Dashboard
+Handles all data loading failures gracefully with comprehensive fallbacks
 """
 
-import json
-import os
-import sys
-from collections import Counter
-from datetime import datetime, timedelta
-from pathlib import Path
-
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit as st
+import pandas as pd
+import numpy as np
+import sys
+from pathlib import Path
+from datetime import datetime, timedelta
 
-# Add parent directory to path to import from src
-sys.path.append(str(Path(__file__).parent.parent))
+# Add parent directory to path
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
 
-try:
-    from src.data_processor import DataProcessor
-    from src.config import Config
-    HAS_SRC = True
-except ImportError:
-    HAS_SRC = False
+# Import our robust data loader
+from robust_data_loader import RobustDataLoader, display_data_loading_status, create_fallback_data
 
+# Import analytics modules
+from analytics.kpi_calculator import KPICalculator
+from analytics.statistical_utils import correlation_with_significance
+
+# Import UI components
+from components.kpi_cards import render_kpi_overview
+from components.insight_display import render_statistical_insights
+from components.data_viz import (
+    create_trend_chart,
+    create_kpi_gauge,
+    create_statistical_summary_chart
+)
+from components.drill_down_views import (
+    render_sleep_analysis_drilldown,
+    render_activity_impact_drilldown,
+    render_pattern_analysis_drilldown
+)
 
 # Page configuration
 st.set_page_config(
-    page_title="三省 (San-Xing) Dashboard",
-    page_icon="📊",
+    page_title="San-Xing Bulletproof Dashboard",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -40,709 +48,409 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        font-size: 2.5rem;
-        color: #1f77b4;
+        font-size: 3rem;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         text-align: center;
         margin-bottom: 2rem;
     }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #1f77b4;
+    
+    .data-source-success {
+        background: #e8f5e8;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 4px solid #28a745;
+        margin: 10px 0;
     }
-    .stMetric > label {
-        font-size: 1rem !important;
+    
+    .data-source-fallback {
+        background: #fff3e0;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 4px solid #ff9800;
+        margin: 10px 0;
+    }
+    
+    .metric-highlight {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        margin: 10px 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-
-@st.cache_data(ttl=300)  # Cache for 5 minutes
-def load_data_from_json(data_file: str = "raw_data.json") -> pd.DataFrame:
-    """Load and preprocess raw diary data from JSON file."""
-    file_path = Path(__file__).parent / data_file
+def main():
+    """Main dashboard application with bulletproof data loading"""
     
-    if not file_path.exists():
-        st.error(f"Data file not found: {data_file}")
-        st.info("Please run download_data.py first to generate the data file.")
-        return pd.DataFrame()
+    # Header
+    st.markdown('<h1 class="main-header">🛡️ San-Xing Bulletproof Dashboard</h1>', unsafe_allow_html=True)
+    st.markdown("### Reliable wellbeing analytics with robust data handling")
     
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+    # Sidebar configuration
+    with st.sidebar:
+        st.markdown("## 🔧 Dashboard Configuration")
         
-        df = pd.DataFrame(data)
-        if 'Timestamp' in df.columns:
-            df['date'] = pd.to_datetime(df['Timestamp'], format='%d/%m/%Y %H:%M:%S')
-            df = df.sort_values('date')
+        # Data loading options
+        st.markdown("### 📊 Data Source")
+        force_fallback = st.checkbox("Force Synthetic Data (for testing)")
         
-        return df
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return pd.DataFrame()
-
-
-@st.cache_data(ttl=300)
-def load_data_from_sheets() -> pd.DataFrame:
-    """Load data directly from Google Sheets using San-Xing data processor."""
-    if not HAS_SRC:
-        st.error("San-Xing source modules not available. Using JSON fallback.")
-        return pd.DataFrame()
-    
-    import os
-    
-    # Change to the main San-Xing directory for relative paths to work
-    original_cwd = os.getcwd()
-    main_dir = Path(__file__).parent.parent
-    
-    try:
-        os.chdir(main_dir)
-        
-        config_path = main_dir / "config.local.toml"
-        if not config_path.exists():
-            st.error("config.local.toml not found. Please set up configuration.")
-            return pd.DataFrame()
-        
-        config = Config.from_file(config_path)
-        processor = DataProcessor(config)
-        
-        # Load from latest snapshot or fetch fresh data
-        snapshot_dir = config.RAW_DIR
-        latest_snapshot = None
-        
-        if snapshot_dir.exists():
-            # First try to find actual snapshot files (not reference files)
-            snapshots = list(snapshot_dir.glob("snapshot_*.json"))
-            # Filter out reference files like snapshot_latest.json
-            data_snapshots = [s for s in snapshots if not s.name.endswith('_latest.json')]
-            
-            if data_snapshots:
-                latest_snapshot = max(data_snapshots, key=lambda p: p.stat().st_mtime)
-            elif snapshots:
-                # Fallback to any snapshot file
-                latest_snapshot = max(snapshots, key=lambda p: p.stat().st_mtime)
-        
-        if latest_snapshot:
-            processor.load_from_snapshot(latest_snapshot)
-            return processor.process_all()
+        if not force_fallback:
+            st.info("Will attempt to load real Google Sheets data first")
         else:
-            # Try to fetch fresh data using ingestion
-            try:
-                from src.ingestion import SheetIngester
-                from src.normalizer import EntryNormalizer
-                
-                ingester = SheetIngester(config)
-                normalizer = EntryNormalizer(config)
-                
-                # Fetch and normalize data
-                raw_rows = ingester.fetch_rows()
-                entries = normalizer.normalize(raw_rows)
-                
-                if not entries:
-                    st.warning("No valid entries found in sheets.")
-                    return pd.DataFrame()
-                
-                # Convert entries to records format for processor
-                records = []
-                for entry in entries:
-                    # Convert DiaryEntry back to dict format
-                    record = {
-                        "Timestamp": entry.timestamp.strftime("%d/%m/%Y %H:%M:%S"),
-                        "今天想記點什麼？": entry.diary_text,
-                        **entry.metadata
-                    }
-                    records.append(record)
-                
-                processor.load_from_records(records)
-                return processor.process_all()
-                
-            except Exception as fetch_error:
-                st.warning(f"Could not fetch fresh data: {fetch_error}. No snapshot available.")
-                return pd.DataFrame()
+            st.warning("Using synthetic data only")
         
-    except Exception as e:
-        st.error(f"Error loading from sheets: {e}")
-        return pd.DataFrame()
-    finally:
-        # Always restore original working directory
-        os.chdir(original_cwd)
-
-
-def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize column names between different data sources (JSON vs DataProcessor)."""
-    if df.empty:
-        return df
-    
-    # Create a copy to avoid modifying the original
-    df = df.copy()
-    
-    # Column mappings from DataProcessor to dashboard expected names
-    column_mappings = {
-        'timestamp': 'date',
-        'mood_level': 'mood',
-        'energy_level': 'energy', 
-        'sleep_quality': 'sleep_quality',  # Keep same name
-        'weight': 'weight',  # Keep same name
-        'screen_time': 'screen_time',  # Keep same name
-        'completed_activities': '今天完成了哪些？',
-        'diary_text': '今天想記點什麼？',
-        'positive_activities': 'positive_activities',  # Keep same name
-        'negative_activities': 'negative_activities',  # Keep same name
-        'activity_balance': 'activity_balance',  # Keep same name
-        'sleep_duration_hours': 'sleep_duration'
-    }
-    
-    # Apply column mappings
-    for old_col, new_col in column_mappings.items():
-        if old_col in df.columns and new_col not in df.columns:
-            df[new_col] = df[old_col]
-    
-    # Ensure date column is datetime
-    if 'date' in df.columns:
-        df['date'] = pd.to_datetime(df['date'], errors='coerce')
-    
-    return df
-
-
-def process_health_metrics(df: pd.DataFrame) -> pd.DataFrame:
-    """Process all health-related metrics."""
-    if df.empty:
-        return df
-    
-    # Normalize columns first
-    df = normalize_dataframe_columns(df)
-    
-    # Handle different data sources (JSON vs DataProcessor)
-    if 'mood' not in df.columns:
-        # JSON source - extract from Chinese column names
-        df['mood'] = pd.to_numeric(df.get('今日整體心情感受', pd.Series()), errors='coerce')
-        df['energy'] = pd.to_numeric(df.get('今日整體精力水平如何？', pd.Series()), errors='coerce')
-        df['sleep_quality'] = pd.to_numeric(df.get('昨晚睡眠品質如何？', pd.Series()), errors='coerce')
-        df['weight'] = pd.to_numeric(df.get('體重紀錄', pd.Series()), errors='coerce')
-        df['screen_time'] = pd.to_numeric(df.get('今日手機螢幕使用時間', pd.Series()), errors='coerce')
-    
-    # Ensure numeric types for existing columns
-    numeric_columns = ['mood', 'energy', 'sleep_quality', 'weight', 'screen_time']
-    for col in numeric_columns:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-    
-    # Calculate weight moving average
-    if 'weight' in df.columns:
-        df['weight_ma'] = df['weight'].rolling(window=7, min_periods=1).mean()
-    
-    return df
-
-
-def parse_time(time_str):
-    """Parse time string in HHMM format to time object."""
-    if pd.isna(time_str) or time_str == '':
-        return None
-    try:
-        return datetime.strptime(str(time_str).zfill(4), '%H%M').time()
-    except ValueError:
-        return None
-
-
-def calc_sleep_duration(bedtime, wake_time):
-    """Calculate sleep duration handling overnight sleep."""
-    if pd.isna(bedtime) or pd.isna(wake_time) or bedtime is None or wake_time is None:
-        return None
-    
-    bed_dt = datetime.combine(datetime.today(), bedtime)
-    wake_dt = datetime.combine(datetime.today(), wake_time)
-    
-    # If bedtime is after 18:00, assume it's previous day
-    if bedtime.hour >= 18:
-        bed_dt -= timedelta(days=1)
-    
-    duration = wake_dt - bed_dt
-    return duration.total_seconds() / 3600  # Convert to hours
-
-
-def process_sleep_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Process sleep-related data."""
-    if df.empty:
-        return df
-    
-    # Normalize columns first
-    df = normalize_dataframe_columns(df)
-    
-    # Check if we need to process raw sleep times or if duration is already calculated
-    if 'sleep_duration' not in df.columns:
-        # Parse sleep times from raw data (JSON source)
-        df['bedtime'] = df.get('昨晚實際入睡時間', pd.Series()).apply(parse_time)
-        df['wake_time'] = df.get('今天實際起床時間', pd.Series()).apply(parse_time)
+        st.divider()
         
-        # Calculate sleep duration
-        df['sleep_duration'] = df.apply(
-            lambda row: calc_sleep_duration(row.get('bedtime'), row.get('wake_time')), axis=1
-        )
+        # Display options
+        st.markdown("### 🎨 Display Options")
+        kpi_layout = st.selectbox("KPI Layout", ["columns", "rows", "grid"], index=0)
+        show_raw_data = st.checkbox("Show Raw Data Preview", False)
+        show_statistical_details = st.checkbox("Show Statistical Methodology", False)
+        
+        st.divider()
+        
+        # Analysis options
+        st.markdown("### 📈 Analysis Options")
+        correlation_alpha = st.slider("Significance Level (α)", 0.01, 0.10, 0.05, 0.01)
+        show_only_significant = st.checkbox("Highlight Only Significant Correlations", False)
+        
+        st.divider()
+        
+        # Data refresh
+        if st.button("🔄 Reload Data"):
+            st.cache_data.clear()
+            st.experimental_rerun()
     
-    return df
-
-
-def process_activities(df: pd.DataFrame) -> pd.DataFrame:
-    """Process and categorize activities."""
-    if df.empty:
-        return df
+    # === DATA LOADING WITH ROBUST FALLBACK ===
     
-    # Normalize columns first
-    df = normalize_dataframe_columns(df)
+    data_source_type = "unknown"
+    kpi_data = None
+    data_info = None
     
-    # If activity counts are already calculated (DataProcessor source), use them
-    if 'positive_activities' in df.columns and 'negative_activities' in df.columns:
-        # Activity balance might already be calculated too
-        if 'activity_balance' not in df.columns:
-            df['activity_balance'] = df['positive_activities'] - df['negative_activities']
-        return df
+    if force_fallback:
+        # Use synthetic data
+        st.markdown("""
+        <div class="data-source-fallback">
+            ⚠️ <strong>Synthetic Data Mode:</strong> Using generated sample data for demonstration
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.spinner("Generating synthetic data..."):
+            kpi_data = create_fallback_data(60)
+            data_source_type = "synthetic"
+        
+        st.success(f"✅ Generated {len(kpi_data)} days of synthetic data")
     
-    # Otherwise, calculate from raw activities (JSON source)
-    # Define activity categories
-    positive_activities = [
-        '英文學習', '閱讀論文', '看書', '戶外活動', '實體社交活動', 
-        '看知識型視頻', '看英文視頻', '額外完成一個任務', '額外完成兩個任務', 
-        '額外完成三個或以上任務'
-    ]
+    else:
+        # Try to load real data first
+        try:
+            kpi_data, data_info = display_data_loading_status()
+            
+            if kpi_data is not None:
+                # Real data loaded successfully
+                st.markdown("""
+                <div class="data-source-success">
+                    ✅ <strong>Real Data Source:</strong> Google Sheets Meta-Awareness Log
+                </div>
+                """, unsafe_allow_html=True)
+                data_source_type = "real"
+            
+            else:
+                # Real data failed, use fallback
+                st.warning("Real data loading failed. Using synthetic data as fallback.")
+                st.markdown("""
+                <div class="data-source-fallback">
+                    🔄 <strong>Fallback Mode:</strong> Using synthetic data due to loading issues
+                </div>
+                """, unsafe_allow_html=True)
+                
+                with st.spinner("Generating fallback data..."):
+                    kpi_data = create_fallback_data(60)
+                    data_source_type = "fallback"
+        
+        except Exception as e:
+            # Complete failure, use fallback
+            st.error(f"Unexpected error during data loading: {e}")
+            st.markdown("""
+            <div class="data-source-fallback">
+                🚨 <strong>Emergency Fallback:</strong> Using synthetic data due to system error
+            </div>
+            """, unsafe_allow_html=True)
+            
+            kpi_data = create_fallback_data(60)
+            data_source_type = "emergency"
     
-    neutral_activities = [
-        '做家務', '頭髮護理', '面部護理', '久坐'
-    ]
+    # Ensure we have data at this point
+    if kpi_data is None or kpi_data.empty:
+        st.error("❌ Complete data loading failure. Cannot proceed.")
+        st.stop()
     
-    negative_activities = [
-        '打遊戲', '滑手機', '看娛樂視頻'
-    ]
-    
-    # Count activities by category
-    def count_activities_by_category(activities_str, category_list):
-        if pd.isna(activities_str):
-            return 0
-        return sum(1 for activity in category_list if activity in str(activities_str))
-    
-    activities_col = df.get('今天完成了哪些？', pd.Series())
-    df['positive_activities'] = activities_col.apply(
-        lambda x: count_activities_by_category(x, positive_activities)
-    )
-    df['neutral_activities'] = activities_col.apply(
-        lambda x: count_activities_by_category(x, neutral_activities)
-    )
-    df['negative_activities'] = activities_col.apply(
-        lambda x: count_activities_by_category(x, negative_activities)
-    )
-    
-    # Calculate activity balance score
-    df['activity_balance'] = df['positive_activities'] - df['negative_activities']
-    
-    return df
-
-
-def render_overview_metrics(df: pd.DataFrame):
-    """Render key metrics overview."""
-    st.markdown('<p class="main-header">📊 三省 (San-Xing) Personal Analytics Dashboard</p>', 
-                unsafe_allow_html=True)
-    
-    if df.empty:
-        st.warning("No data available")
-        return
-    
-    # Calculate key metrics
-    total_entries = len(df)
-    date_range = f"{df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}"
-    
+    # Show data source information
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric(
-            label="📝 Total Entries",
-            value=total_entries
-        )
+        st.metric("Data Source", data_source_type.title())
     
     with col2:
-        avg_mood = df['mood'].mean() if not df['mood'].isna().all() else 0
-        st.metric(
-            label="😊 Average Mood",
-            value=f"{avg_mood:.1f}/10"
-        )
+        st.metric("Total Entries", len(kpi_data))
     
     with col3:
-        avg_energy = df['energy'].mean() if not df['energy'].isna().all() else 0
-        st.metric(
-            label="⚡ Average Energy",
-            value=f"{avg_energy:.1f}/10"
-        )
+        if 'date' in kpi_data.columns:
+            try:
+                date_range = f"{kpi_data['date'].min().strftime('%m-%d')} to {kpi_data['date'].max().strftime('%m-%d')}"
+                st.metric("Date Range", date_range)
+            except Exception:
+                st.metric("Date Range", "N/A")
+        else:
+            st.metric("Date Range", "N/A")
     
     with col4:
-        avg_sleep = df['sleep_duration'].mean() if not df['sleep_duration'].isna().all() else 0
-        st.metric(
-            label="🛌 Average Sleep",
-            value=f"{avg_sleep:.1f}h"
-        )
-    
-    st.markdown(f"**Data Range:** {date_range}")
-    st.divider()
-
-
-def render_health_dashboard(df: pd.DataFrame):
-    """Render comprehensive health dashboard."""
-    st.subheader("🏥 Health Metrics Dashboard")
-    
-    if df.empty:
-        st.warning("No health data available")
-        return
-    
-    # Create subplots
-    fig = make_subplots(
-        rows=2, cols=3,
-        subplot_titles=['Daily Mood Levels', 'Daily Energy Levels', 'Screen Time', 
-                       'Weight Trends', 'Sleep Quality', 'Mood vs Energy'],
-        specs=[[{"secondary_y": False}, {"secondary_y": False}, {"secondary_y": False}],
-               [{"secondary_y": True}, {"secondary_y": False}, {"secondary_y": False}]]
-    )
-    
-    # Mood over time
-    valid_mood = df[df['mood'].notna()]
-    if not valid_mood.empty:
-        fig.add_trace(
-            go.Scatter(x=valid_mood['date'], y=valid_mood['mood'], 
-                      mode='lines+markers', name='Mood', 
-                      line=dict(color='green')),
-            row=1, col=1
-        )
-    
-    # Energy over time
-    valid_energy = df[df['energy'].notna()]
-    if not valid_energy.empty:
-        fig.add_trace(
-            go.Scatter(x=valid_energy['date'], y=valid_energy['energy'], 
-                      mode='lines+markers', name='Energy', 
-                      line=dict(color='blue')),
-            row=1, col=2
-        )
-    
-    # Screen time
-    valid_screen = df[df['screen_time'].notna()]
-    if not valid_screen.empty:
-        fig.add_trace(
-            go.Scatter(x=valid_screen['date'], y=valid_screen['screen_time'], 
-                      mode='lines+markers', name='Screen Time', 
-                      line=dict(color='red')),
-            row=1, col=3
-        )
-    
-    # Weight trends
-    valid_weight = df[df['weight'].notna()]
-    if not valid_weight.empty:
-        fig.add_trace(
-            go.Scatter(x=valid_weight['date'], y=valid_weight['weight'], 
-                      mode='markers', name='Daily Weight', 
-                      marker=dict(color='orange', size=6)),
-            row=2, col=1
-        )
-        fig.add_trace(
-            go.Scatter(x=valid_weight['date'], y=valid_weight['weight_ma'], 
-                      mode='lines', name='7-Day Average', 
-                      line=dict(color='darkorange', width=3)),
-            row=2, col=1
-        )
-    
-    # Sleep quality
-    valid_sleep = df[df['sleep_quality'].notna()]
-    if not valid_sleep.empty:
-        fig.add_trace(
-            go.Scatter(x=valid_sleep['date'], y=valid_sleep['sleep_quality'], 
-                      mode='lines+markers', name='Sleep Quality', 
-                      line=dict(color='purple')),
-            row=2, col=2
-        )
-    
-    # Mood vs Energy correlation
-    valid_both = df[(df['mood'].notna()) & (df['energy'].notna())]
-    if not valid_both.empty:
-        fig.add_trace(
-            go.Scatter(x=valid_both['mood'], y=valid_both['energy'], 
-                      mode='markers', name='Mood vs Energy', 
-                      marker=dict(color='teal', size=8)),
-            row=2, col=3
-        )
-    
-    fig.update_layout(height=800, showlegend=False, title_text="Health Metrics Overview")
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def render_activity_analysis(df: pd.DataFrame):
-    """Render activity analysis section."""
-    st.subheader("🎯 Activity Analysis")
-    
-    if df.empty:
-        st.warning("No activity data available")
-        return
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Activity trends over time
-        fig_trends = go.Figure()
-        
-        if 'positive_activities' in df.columns:
-            fig_trends.add_trace(go.Scatter(
-                x=df['date'], 
-                y=df['positive_activities'], 
-                fill='tonexty',
-                mode='lines',
-                name='Positive Activities',
-                line=dict(color='green')
-            ))
-        
-        if 'negative_activities' in df.columns:
-            fig_trends.add_trace(go.Scatter(
-                x=df['date'], 
-                y=df['negative_activities'], 
-                fill='tonexty',
-                mode='lines',
-                name='Negative Activities',
-                line=dict(color='red')
-            ))
-        
-        fig_trends.update_layout(
-            title="Activity Trends Over Time",
-            xaxis_title="Date",
-            yaxis_title="Number of Activities",
-            height=400
-        )
-        st.plotly_chart(fig_trends, use_container_width=True)
-    
-    with col2:
-        # Activity balance vs mood
-        if 'activity_balance' in df.columns and 'mood' in df.columns:
-            valid_balance = df[(df['activity_balance'].notna()) & (df['mood'].notna())]
-            
-            if not valid_balance.empty:
-                # Handle energy column for sizing - filter out NaN values
-                size_col = None
-                if 'energy' in df.columns:
-                    # Only use energy for sizing if we have valid energy data
-                    valid_balance_with_energy = valid_balance[valid_balance['energy'].notna()]
-                    if not valid_balance_with_energy.empty:
-                        valid_balance = valid_balance_with_energy
-                        size_col = 'energy'
-                
-                fig_balance = px.scatter(
-                    valid_balance, 
-                    x='activity_balance', 
-                    y='mood',
-                    size=size_col,
-                    title="Activity Balance vs Mood" + (" (Size = Energy)" if size_col else ""),
-                    labels={'activity_balance': 'Activity Balance Score', 'mood': 'Mood (1-10)'}
-                )
-                fig_balance.update_layout(height=400)
-                st.plotly_chart(fig_balance, use_container_width=True)
-    
-    # Most common activities
-    if '今天完成了哪些？' in df.columns:
-        st.subheader("Top Activities")
-        all_activities = []
-        
-        for activities_data in df['今天完成了哪些？'].dropna():
-            if activities_data:
-                # Handle both string (JSON source) and list (DataProcessor source) formats
-                if isinstance(activities_data, str):
-                    if activities_data.strip():
-                        activities = [act.strip() for act in activities_data.split(',')]
-                        all_activities.extend(activities)
-                elif isinstance(activities_data, list):
-                    # Already a list from DataProcessor
-                    all_activities.extend(activities_data)
-                else:
-                    # Convert other types to string and split
-                    activities_str = str(activities_data)
-                    if activities_str.strip():
-                        activities = [act.strip() for act in activities_str.split(',')]
-                        all_activities.extend(activities)
-        
-        if all_activities:
-            activity_counts = Counter(all_activities)
-            top_activities = activity_counts.most_common(10)
-            
-            if top_activities:
-                activities_df = pd.DataFrame(top_activities, columns=['Activity', 'Count'])
-                
-                fig_top = px.bar(
-                    activities_df, 
-                    x='Count', 
-                    y='Activity',
-                    orientation='h',
-                    title="Top 10 Most Common Activities"
-                )
-                fig_top.update_layout(height=400)
-                st.plotly_chart(fig_top, use_container_width=True)
-
-
-def render_sleep_analysis(df: pd.DataFrame):
-    """Render sleep analysis section."""
-    st.subheader("🛌 Sleep Analysis")
-    
-    if df.empty:
-        st.warning("No sleep data available")
-        return
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Sleep duration trends
-        if 'sleep_duration' in df.columns:
-            valid_sleep = df[df['sleep_duration'].notna()]
-            
-            if not valid_sleep.empty:
-                fig_duration = go.Figure()
-                
-                fig_duration.add_trace(go.Scatter(
-                    x=valid_sleep['date'],
-                    y=valid_sleep['sleep_duration'],
-                    mode='lines+markers',
-                    name='Sleep Duration',
-                    line=dict(color='blue')
-                ))
-                
-                # Add recommended sleep lines
-                fig_duration.add_hline(
-                    y=8, line_dash="dash", 
-                    annotation_text="Recommended 8h", 
-                    line_color="green"
-                )
-                fig_duration.add_hline(
-                    y=7, line_dash="dash", 
-                    annotation_text="Minimum 7h", 
-                    line_color="orange"
-                )
-                
-                fig_duration.update_layout(
-                    title="Sleep Duration Trends",
-                    xaxis_title="Date",
-                    yaxis_title="Sleep Duration (Hours)",
-                    height=400
-                )
-                st.plotly_chart(fig_duration, use_container_width=True)
-    
-    with col2:
-        # Sleep quality correlation
-        if 'sleep_duration' in df.columns and 'sleep_quality' in df.columns:
-            valid_corr = df[(df['sleep_duration'].notna()) & (df['sleep_quality'].notna())]
-            
-            if not valid_corr.empty:
-                # Handle energy column for sizing - filter out NaN values
-                size_col = None
-                if 'energy' in df.columns:
-                    # Only use energy for sizing if we have valid energy data
-                    valid_corr_with_energy = valid_corr[valid_corr['energy'].notna()]
-                    if not valid_corr_with_energy.empty:
-                        valid_corr = valid_corr_with_energy
-                        size_col = 'energy'
-                
-                fig_quality = px.scatter(
-                    valid_corr,
-                    x='sleep_duration',
-                    y='sleep_quality',
-                    size=size_col,
-                    title="Sleep Duration vs Quality" + (" (Size = Energy)" if size_col else ""),
-                    labels={'sleep_duration': 'Sleep Duration (Hours)', 
-                           'sleep_quality': 'Sleep Quality (1-10)'}
-                )
-                fig_quality.update_layout(height=400)
-                st.plotly_chart(fig_quality, use_container_width=True)
-
-
-def main():
-    """Main dashboard function."""
-    # Sidebar
-    st.sidebar.title("⚙️ Dashboard Settings")
-    
-    # Data source selection
-    data_source = st.sidebar.selectbox(
-        "Data Source",
-        ["JSON File", "Google Sheets (Live)"],
-        help="Choose between static JSON file or live Google Sheets data"
-    )
-    
-    # Load data based on selection
-    if data_source == "Google Sheets (Live)":
-        df = load_data_from_sheets()
-        if df.empty:  # Fallback to JSON if sheets loading fails
-            st.sidebar.warning("Falling back to JSON file")
-            df = load_data_from_json()
-    else:
-        df = load_data_from_json()
-    
-    if df.empty:
-        st.error("No data available. Please check your data source.")
-        return
-    
-    # Process data
-    df = process_health_metrics(df)
-    df = process_sleep_data(df)
-    df = process_activities(df)
-    
-    # Date filter
-    if 'date' in df.columns and not df['date'].isna().all():
-        min_date = df['date'].min().date()
-        max_date = df['date'].max().date()
-        
-        date_range = st.sidebar.date_input(
-            "Date Range",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date
-        )
-        
-        if len(date_range) == 2:
-            start_date, end_date = date_range
-            df = df[(df['date'].dt.date >= start_date) & (df['date'].dt.date <= end_date)]
-    
-    # Refresh button
-    if st.sidebar.button("🔄 Refresh Data", help="Refresh dashboard data"):
-        st.cache_data.clear()
-        st.rerun()
-    
-    # Main dashboard
-    render_overview_metrics(df)
-    
-    # Tabs for different analyses
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Health Overview", "🎯 Activities", "🛌 Sleep", "📈 Correlations"])
-    
-    with tab1:
-        render_health_dashboard(df)
-    
-    with tab2:
-        render_activity_analysis(df)
-    
-    with tab3:
-        render_sleep_analysis(df)
-    
-    with tab4:
-        st.subheader("📈 Correlation Analysis")
-        # Correlation matrix
-        numeric_cols = ['mood', 'energy', 'sleep_quality', 'sleep_duration', 
-                       'weight', 'screen_time', 'positive_activities', 'negative_activities']
-        available_cols = [col for col in numeric_cols if col in df.columns]
-        
-        if len(available_cols) > 1:
-            corr_data = df[available_cols].corr()
-            
-            fig_corr = px.imshow(
-                corr_data,
-                title="Health Metrics Correlation Matrix",
-                aspect="auto",
-                color_continuous_scale="RdBu_r"
-            )
-            st.plotly_chart(fig_corr, use_container_width=True)
+        # Calculate data completeness
+        numeric_cols = kpi_data.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 0:
+            completeness = (1 - kpi_data[numeric_cols].isnull().sum().sum() / (len(kpi_data) * len(numeric_cols))) * 100
+            st.metric("Completeness", f"{completeness:.0f}%")
         else:
-            st.warning("Insufficient data for correlation analysis")
+            st.metric("Completeness", "N/A")
+    
+    # Show raw data preview if requested
+    if show_raw_data:
+        with st.expander("📋 Raw Data Preview", expanded=False):
+            st.dataframe(kpi_data.head(20))
+            st.write(f"**Dataset shape:** {kpi_data.shape[0]} entries × {kpi_data.shape[1]} columns")
+            
+            # Show column info
+            st.write("**Column Information:**")
+            for col in kpi_data.columns:
+                non_null_count = kpi_data[col].count()
+                st.write(f"- {col}: {non_null_count}/{len(kpi_data)} non-null ({non_null_count/len(kpi_data)*100:.0f}%)")
+    
+    # === ANALYTICS PROCESSING ===
+    
+    with st.spinner("Calculating KPIs and statistical analysis..."):
+        try:
+            # Calculate KPIs
+            kpis = KPICalculator.calculate_all_kpis(kpi_data)
+            
+            # Calculate correlations on numeric columns only
+            numeric_cols = kpi_data.select_dtypes(include=[np.number])
+            if len(numeric_cols.columns) > 1:
+                correlations = correlation_with_significance(
+                    numeric_cols, 
+                    alpha=correlation_alpha
+                )
+            else:
+                correlations = {'significant_correlations': [], 'all_correlations': {}, 'total_tests': 0}
+                
+        except Exception as e:
+            st.error(f"Analytics calculation failed: {e}")
+            # Use minimal analytics as fallback
+            kpis = {}
+            correlations = {'significant_correlations': [], 'all_correlations': {}, 'total_tests': 0}
+    
+    st.success(f"✅ Analytics completed: {len(kpis)} KPIs calculated")
+    
+    # === MAIN DASHBOARD SECTIONS ===
+    
+    # 1. KPI Overview
+    if kpis:
+        st.markdown("## 📊 Key Performance Indicators")
+        render_kpi_overview(kpis, layout=kpi_layout)
+        st.divider()
+    
+    # 2. Statistical Insights
+    if len(numeric_cols.columns) > 1:
+        render_statistical_insights(
+            correlations, 
+            show_methodology=show_statistical_details
+        )
+        st.divider()
+    
+    # 3. Interactive Visualizations
+    st.markdown("## 📈 Interactive Visualizations")
+    
+    viz_tab1, viz_tab2, viz_tab3 = st.tabs(["Trends", "Correlations", "Distributions"])
+    
+    with viz_tab1:
+        # Trend analysis
+        trend_cols = ['mood', 'energy', 'sleep_quality']
+        available_cols = [col for col in trend_cols if col in kpi_data.columns and not kpi_data[col].isna().all()]
+        
+        if available_cols:
+            try:
+                trend_chart = create_trend_chart(
+                    data=kpi_data,
+                    value_columns=available_cols,
+                    date_column='date',
+                    title=f"Wellbeing Metrics Over Time ({data_source_type.title()} Data)",
+                    show_trend_lines=True
+                )
+                st.plotly_chart(trend_chart, use_container_width=True)
+            except Exception as e:
+                st.error(f"Trend chart failed: {e}")
+        else:
+            st.info("No trend data available for visualization")
+        
+        # Individual KPI gauges
+        if kpis:
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if 'wellbeing_score' in kpis:
+                    try:
+                        gauge_fig = create_kpi_gauge(
+                            value=kpis['wellbeing_score']['score'],
+                            max_value=10,
+                            title="Wellbeing Score",
+                            color_scheme="blue"
+                        )
+                        st.plotly_chart(gauge_fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Wellbeing gauge failed: {e}")
+            
+            with col2:
+                if 'balance_index' in kpis:
+                    try:
+                        gauge_fig = create_kpi_gauge(
+                            value=kpis['balance_index']['index'],
+                            max_value=100,
+                            title="Balance Index (%)",
+                            color_scheme="green"
+                        )
+                        st.plotly_chart(gauge_fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Balance gauge failed: {e}")
+            
+            with col3:
+                if 'trend_indicator' in kpis:
+                    try:
+                        confidence_map = {'high': 0.9, 'medium': 0.6, 'low': 0.3}
+                        confidence_val = confidence_map.get(kpis['trend_indicator']['confidence'], 0.3)
+                        
+                        gauge_fig = create_kpi_gauge(
+                            value=confidence_val,
+                            max_value=1.0,
+                            title="Trend Confidence",
+                            color_scheme="purple"
+                        )
+                        st.plotly_chart(gauge_fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Trend gauge failed: {e}")
+    
+    with viz_tab2:
+        # Correlation analysis
+        if len(numeric_cols.columns) > 1:
+            try:
+                from components.insight_display import render_correlation_matrix
+                render_correlation_matrix(
+                    data=numeric_cols,
+                    correlation_results=correlations,
+                    show_only_significant=show_only_significant
+                )
+            except Exception as e:
+                st.error(f"Correlation matrix failed: {e}")
+        else:
+            st.info("Need at least 2 numeric variables for correlation analysis")
+    
+    with viz_tab3:
+        # Distribution analysis
+        try:
+            dist_type = st.selectbox("Distribution View", ["box", "violin", "histogram"])
+            wellbeing_cols = ['mood', 'energy', 'sleep_quality', 'sleep_duration']
+            available_dist_cols = [col for col in wellbeing_cols if col in kpi_data.columns and not kpi_data[col].isna().all()]
+            
+            if available_dist_cols:
+                dist_chart = create_statistical_summary_chart(
+                    data=kpi_data,
+                    columns=available_dist_cols,
+                    chart_type=dist_type
+                )
+                st.plotly_chart(dist_chart, use_container_width=True)
+            else:
+                st.info("No numeric data available for distribution analysis")
+        except Exception as e:
+            st.error(f"Distribution analysis failed: {e}")
+    
+    st.divider()
+    
+    # 4. Drill-down Analysis (with error handling)
+    st.markdown("## 🔍 Detailed Analysis")
+    
+    analysis_tab1, analysis_tab2, analysis_tab3 = st.tabs(["Sleep Analysis", "Activity Impact", "Pattern Analysis"])
+    
+    with analysis_tab1:
+        try:
+            render_sleep_analysis_drilldown(kpi_data, kpis)
+        except Exception as e:
+            st.error(f"Sleep analysis failed: {e}")
+    
+    with analysis_tab2:
+        try:
+            render_activity_impact_drilldown(kpi_data, kpis)
+        except Exception as e:
+            st.error(f"Activity analysis failed: {e}")
+    
+    with analysis_tab3:
+        try:
+            render_pattern_analysis_drilldown(kpi_data, correlations, kpis)
+        except Exception as e:
+            st.error(f"Pattern analysis failed: {e}")
+    
+    st.divider()
+    
+    # 5. Dashboard Summary
+    st.markdown("## 📋 Dashboard Summary")
+    
+    summary_col1, summary_col2, summary_col3 = st.columns(3)
+    
+    with summary_col1:
+        completeness = (1 - kpi_data.isnull().sum().sum() / (len(kpi_data) * len(kpi_data.columns))) * 100 if not kpi_data.empty else 0
+        st.markdown(f"""
+        <div class="metric-highlight">
+            <h3>Data Quality</h3>
+            <p><strong>{completeness:.0f}%</strong> completeness</p>
+            <p><strong>{len(kpi_data)}</strong> entries analyzed</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with summary_col2:
+        sig_count = len(correlations.get('significant_correlations', []))
+        st.markdown(f"""
+        <div class="metric-highlight">
+            <h3>Statistical Findings</h3>
+            <p><strong>{sig_count}</strong> significant correlations</p>
+            <p><strong>{correlations.get('total_tests', 0)}</strong> tests performed</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with summary_col3:
+        data_source_desc = {
+            "real": "Live Google Sheets",
+            "synthetic": "Generated Sample",
+            "fallback": "Backup Data",
+            "emergency": "Emergency Backup"
+        }.get(data_source_type, "Unknown")
+        
+        st.markdown(f"""
+        <div class="metric-highlight">
+            <h3>Data Source</h3>
+            <p><strong>{data_source_desc}</strong></p>
+            <p><strong>{len(kpis)}</strong> KPIs calculated</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     # Footer
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**三省 (San-Xing)**")
-    st.sidebar.markdown("*Automated meta-awareness & reflective coaching*")
-
+    st.markdown("---")
+    st.markdown(f"""
+    <div style='text-align: center; color: #666; padding: 20px;'>
+        🛡️ <strong>San-Xing Bulletproof Dashboard</strong> - Reliable wellbeing analytics<br>
+        Data Source: {data_source_desc} | Robust error handling ensures dashboard always works
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
