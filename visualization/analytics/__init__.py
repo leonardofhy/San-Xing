@@ -5,7 +5,6 @@ for the San-Xing personal analytics system.
 """
 
 from .kpi_calculator import KPICalculator
-from .insight_engine import InsightEngine
 from .statistical_utils import (
     calculate_significance,
     minimum_sample_size_check,
@@ -15,7 +14,6 @@ from .statistical_utils import (
 
 __all__ = [
     'KPICalculator',
-    'InsightEngine', 
     'calculate_significance',
     'minimum_sample_size_check',
     'correlation_with_significance',
