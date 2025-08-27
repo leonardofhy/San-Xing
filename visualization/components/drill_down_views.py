@@ -13,7 +13,13 @@ import numpy as np
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 
-from .data_viz import create_trend_chart, create_correlation_heatmap
+from .data_viz import (
+    create_trend_chart, 
+    create_correlation_heatmap,
+    create_sleep_quality_comparison,
+    create_sleep_components_radar,
+    create_sleep_timing_chart
+)
 
 import sys
 from pathlib import Path
@@ -37,12 +43,170 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
     st.markdown("## Sleep Analysis Deep Dive")
     
     # Check for required columns
-    sleep_cols = ['sleep_duration', 'sleep_quality']
+    sleep_cols = ['sleep_duration_hours', 'sleep_quality', 'sleep_bedtime', 'wake_time']
     available_sleep_cols = [col for col in sleep_cols if col in data.columns]
     
     if not available_sleep_cols:
         st.warning("No sleep data available for analysis")
         return
+    
+    # Sleep Quality Analysis Section
+    sleep_quality_data = kpi_results.get('sleep_quality_analysis', {})
+    if sleep_quality_data and 'error' not in sleep_quality_data:
+        st.markdown("### Sleep Quality Analysis")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Create comparison chart
+            comparison_chart = create_sleep_quality_comparison(sleep_quality_data)
+            st.plotly_chart(comparison_chart, use_container_width=True)
+        
+        with col2:
+            # Create radar chart if objective data is available
+            objective_data = sleep_quality_data.get('objective_quality', {})
+            if objective_data and 'components' in objective_data:
+                radar_chart = create_sleep_components_radar(objective_data)
+                st.plotly_chart(radar_chart, use_container_width=True)
+        
+        # Sleep Quality Insights
+        with st.expander("Sleep Quality Insights", expanded=False):
+            subjective_avg = sleep_quality_data.get('subjective_avg')
+            objective_avg = objective_data.get('objective_sleep_quality')
+            correlation = sleep_quality_data.get('comparison', {}).get('correlation')
+            
+            if subjective_avg is not None:
+                st.metric("Average Subjective Rating", f"{subjective_avg:.1f}/5", 
+                         help="How you rated your sleep quality")
+            
+            if objective_avg is not None:
+                st.metric("Objective Sleep Score", f"{objective_avg:.1f}/5",
+                         help="Based on sleep timing patterns and circadian science")
+            
+            if correlation is not None:
+                correlation_strength = "Strong" if abs(correlation) > 0.7 else "Moderate" if abs(correlation) > 0.3 else "Weak"
+                st.metric("Agreement Level", correlation_strength,
+                         help=f"Correlation between subjective and objective: {correlation:.3f}")
+                
+                # Analysis interpretation
+                if objective_avg and subjective_avg:
+                    diff = objective_avg - subjective_avg
+                    if abs(diff) < 0.5:
+                        st.success("✓ Good alignment between how you feel and your sleep patterns")
+                    elif diff > 0.5:
+                        st.info("💡 Your sleep timing is better than you feel - consider factors affecting sleep perception")
+                    else:
+                        st.warning("⚠️ You feel better than your sleep timing suggests - great sleep satisfaction despite suboptimal patterns")
+            
+            # Component analysis
+            components = objective_data.get('components', {})
+            if components:
+                st.markdown("**Sleep Quality Components:**")
+                comp_col1, comp_col2 = st.columns(2)
+                
+                with comp_col1:
+                    if 'duration_score' in components:
+                        duration_pct = components['duration_score'] * 100
+                        st.metric("Duration Score", f"{duration_pct:.0f}%", 
+                                help="How well your sleep duration aligns with recommendations")
+                    
+                    if 'regularity_score' in components:
+                        regularity_pct = components['regularity_score'] * 100
+                        st.metric("Regularity Score", f"{regularity_pct:.0f}%",
+                                help="Consistency of your sleep timing")
+                
+                with comp_col2:
+                    if 'timing_score' in components:
+                        timing_pct = components['timing_score'] * 100
+                        st.metric("Timing Score", f"{timing_pct:.0f}%",
+                                help="How well your sleep aligns with circadian rhythms")
+                    
+                    if 'efficiency_score' in components:
+                        efficiency_pct = components['efficiency_score'] * 100
+                        st.metric("Efficiency Score", f"{efficiency_pct:.0f}%",
+                                help="Overall sleep pattern efficiency")
+        
+        st.divider()
+    
+    # Sleep Timing Patterns
+    if 'sleep_bedtime' in data.columns and 'wake_time' in data.columns:
+        st.markdown("### Sleep Timing Patterns")
+        
+        timing_chart = create_sleep_timing_chart(data)
+        st.plotly_chart(timing_chart, use_container_width=True)
+        
+        # Timing analysis
+        with st.expander("Sleep Timing Analysis", expanded=False):
+            timing_data = data.dropna(subset=['sleep_bedtime', 'wake_time'])
+            
+            if not timing_data.empty:
+                # Calculate average times
+                def time_to_minutes(time_str):
+                    try:
+                        hours, minutes = map(int, str(time_str).split(':'))
+                        return hours * 60 + minutes
+                    except:
+                        return None
+                
+                timing_data = timing_data.copy()
+                timing_data['bedtime_minutes'] = timing_data['sleep_bedtime'].apply(time_to_minutes)
+                timing_data['wake_minutes'] = timing_data['wake_time'].apply(time_to_minutes)
+                
+                timing_data = timing_data.dropna(subset=['bedtime_minutes', 'wake_minutes'])
+                
+                if not timing_data.empty:
+                    avg_bedtime_min = timing_data['bedtime_minutes'].mean()
+                    avg_wake_min = timing_data['wake_minutes'].mean()
+                    
+                    # Convert back to time format
+                    avg_bedtime_hours = int(avg_bedtime_min // 60) % 24
+                    avg_bedtime_mins = int(avg_bedtime_min % 60)
+                    avg_wake_hours = int(avg_wake_min // 60) % 24
+                    avg_wake_mins = int(avg_wake_min % 60)
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric(
+                            "Average Bedtime", 
+                            f"{avg_bedtime_hours:02d}:{avg_bedtime_mins:02d}",
+                            help="Your average bedtime"
+                        )
+                    
+                    with col2:
+                        st.metric(
+                            "Average Wake Time",
+                            f"{avg_wake_hours:02d}:{avg_wake_mins:02d}",
+                            help="Your average wake up time"
+                        )
+                    
+                    with col3:
+                        # Calculate regularity
+                        bedtime_std = timing_data['bedtime_minutes'].std() / 60  # Convert to hours
+                        regularity_score = max(0, 100 - (bedtime_std * 30))  # 30 = penalty factor
+                        st.metric(
+                            "Sleep Regularity",
+                            f"{regularity_score:.0f}%",
+                            help=f"Based on bedtime consistency (±{bedtime_std:.1f}h variation)"
+                        )
+                    
+                    # Timing recommendations
+                    st.markdown("**Timing Insights:**")
+                    if avg_bedtime_hours >= 22 and avg_bedtime_hours <= 23:
+                        st.success("✓ Your bedtime aligns well with circadian rhythms")
+                    elif avg_bedtime_hours < 22:
+                        st.info("💤 You're an early sleeper - great for morning productivity!")
+                    else:
+                        st.warning("🌙 Late bedtimes may impact sleep quality - consider gradual adjustment")
+                    
+                    if avg_wake_hours >= 6 and avg_wake_hours <= 8:
+                        st.success("✓ Your wake time is within optimal range")
+                    elif avg_wake_hours < 6:
+                        st.info("🌅 Early riser! Make sure you're getting enough total sleep")
+                    else:
+                        st.warning("😴 Later wake times - consider if this aligns with your schedule")
+        
+        st.divider()
     
     # Sleep overview metrics
     with st.container():
@@ -50,10 +214,10 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
         
         col1, col2, col3, col4 = st.columns(4)
         
-        if 'sleep_duration' in data.columns:
-            duration_data = data['sleep_duration'].dropna()
+        if 'sleep_duration_hours' in data.columns:
+            duration_data = data['sleep_duration_hours'].dropna()
             avg_duration = duration_data.mean()
-            target_nights = len(duration_data[(duration_data >= 7) & (duration_data <= 8)])
+            target_nights = len(duration_data[(duration_data >= 7) & (duration_data <= 9)])
             target_percentage = target_nights / len(duration_data) * 100 if len(duration_data) > 0 else 0
             
             with col1:
@@ -67,7 +231,7 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
                 st.metric(
                     "Target Achievement",
                     f"{target_percentage:.1f}%",
-                    help="Nights with 7-8 hours sleep"
+                    help="Nights with 7-9 hours sleep (optimal range)"
                 )
         
         if 'sleep_quality' in data.columns:
@@ -78,7 +242,7 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
             with col3:
                 st.metric(
                     "Average Quality",
-                    f"{avg_quality:.1f}/10",
+                    f"{avg_quality:.1f}/5",
                     help=f"95% CI: {quality_ci[0]:.1f}-{quality_ci[1]:.1f}"
                 )
             
@@ -93,21 +257,21 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
     st.divider()
     
     # Sleep patterns visualization
-    st.markdown("###  Sleep Patterns Over Time")
+    st.markdown("### Sleep Patterns Over Time")
     
     if len(available_sleep_cols) > 0:
         # Create dual-axis chart for duration and quality
-        date_col = 'date' if 'date' in data.columns else data.index
+        date_col = 'logical_date' if 'logical_date' in data.columns else data.index
         
-        if 'date' in data.columns:
+        if 'logical_date' in data.columns:
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             
-            if 'sleep_duration' in data.columns:
-                duration_data = data.dropna(subset=['sleep_duration'])
+            if 'sleep_duration_hours' in data.columns:
+                duration_data = data.dropna(subset=['sleep_duration_hours'])
                 fig.add_trace(
                     go.Scatter(
-                        x=duration_data['date'],
-                        y=duration_data['sleep_duration'],
+                        x=duration_data['logical_date'],
+                        y=duration_data['sleep_duration_hours'],
                         mode='lines+markers',
                         name='Sleep Duration',
                         line=dict(color='#1f77b4', width=2),
@@ -120,9 +284,9 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
                     secondary_y=False
                 )
                 
-                # Add target range
+                # Add target range (7-9 hours optimal)
                 fig.add_hrect(
-                    y0=7, y1=8,
+                    y0=7, y1=9,
                     fillcolor="rgba(0,255,0,0.1)",
                     layer="below",
                     line_width=0,
@@ -133,7 +297,7 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
                 quality_data = data.dropna(subset=['sleep_quality'])
                 fig.add_trace(
                     go.Scatter(
-                        x=quality_data['date'],
+                        x=quality_data['logical_date'],
                         y=quality_data['sleep_quality'],
                         mode='lines+markers',
                         name='Sleep Quality',
@@ -141,7 +305,7 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
                         marker=dict(size=6),
                         hovertemplate="<b>Sleep Quality</b><br>" +
                                      "Date: %{x}<br>" +
-                                     "Rating: %{y:.1f}/10<br>" +
+                                     "Rating: %{y:.1f}/5<br>" +
                                      "<extra></extra>"
                     ),
                     secondary_y=True
@@ -150,7 +314,7 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
             # Update axes
             fig.update_xaxes(title_text="Date")
             fig.update_yaxes(title_text="Sleep Duration (hours)", secondary_y=False)
-            fig.update_yaxes(title_text="Sleep Quality (1-10)", secondary_y=True)
+            fig.update_yaxes(title_text="Sleep Quality (1-5)", secondary_y=True)
             
             fig.update_layout(
                 title="Sleep Duration vs Quality Over Time",
@@ -163,10 +327,10 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
     st.divider()
     
     # Sleep correlation analysis
-    st.markdown("###  Sleep Impact Analysis")
+    st.markdown("### Sleep Impact Analysis")
     
     # Correlate sleep with other wellbeing metrics
-    wellbeing_cols = ['mood', 'energy', 'sleep_quality', 'sleep_duration']
+    wellbeing_cols = ['mood_level', 'energy_level', 'sleep_quality', 'sleep_duration_hours']
     available_wellbeing_cols = [col for col in wellbeing_cols if col in data.columns]
     
     if len(available_wellbeing_cols) >= 2:
@@ -174,11 +338,11 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
         
         with col1:
             st.markdown("**Sleep Duration Correlations:**")
-            if 'sleep_duration' in data.columns:
-                for col in ['mood', 'energy', 'sleep_quality']:
+            if 'sleep_duration_hours' in data.columns:
+                for col in ['mood_level', 'energy_level', 'sleep_quality']:
                     if col in data.columns:
                         result = calculate_significance(
-                            data['sleep_duration'], 
+                            data['sleep_duration_hours'], 
                             data[col], 
                             test_type='correlation'
                         )
@@ -188,18 +352,19 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
                         significant = result['significant']
                         
                         sig_indicator = "✓" if significant else "-"
-                        st.write(f"{sig_indicator} {col.title()}: r={correlation:.3f} (p={p_value:.3f})")
+                        col_display = col.replace('_level', '').replace('_', ' ').title()
+                        st.write(f"{sig_indicator} {col_display}: r={correlation:.3f} (p={p_value:.3f})")
                         
                         if significant:
                             if correlation > 0:
-                                st.success(f"Longer sleep correlates with better {col}")
+                                st.success(f"Longer sleep correlates with better {col_display.lower()}")
                             else:
-                                st.warning(f"Longer sleep correlates with lower {col}")
+                                st.warning(f"Longer sleep correlates with lower {col_display.lower()}")
         
         with col2:
             st.markdown("**Sleep Quality Correlations:**")
             if 'sleep_quality' in data.columns:
-                for col in ['mood', 'energy', 'sleep_duration']:
+                for col in ['mood_level', 'energy_level', 'sleep_duration_hours']:
                     if col in data.columns:
                         result = calculate_significance(
                             data['sleep_quality'], 
@@ -212,48 +377,79 @@ def render_sleep_analysis_drilldown(data: pd.DataFrame,
                         significant = result['significant']
                         
                         sig_indicator = "✓" if significant else "-"
-                        st.write(f"{sig_indicator} {col.title()}: r={correlation:.3f} (p={p_value:.3f})")
+                        col_display = col.replace('_level', '').replace('_hours', '').replace('_', ' ').title()
+                        st.write(f"{sig_indicator} {col_display}: r={correlation:.3f} (p={p_value:.3f})")
     
     st.divider()
     
     # Sleep recommendations
-    st.markdown("###  Sleep Optimization Recommendations")
+    st.markdown("### Sleep Optimization Recommendations")
     
     recommendations = []
     
-    if 'sleep_duration' in data.columns:
-        avg_duration = data['sleep_duration'].mean()
-        target_achievement = len(data[(data['sleep_duration'] >= 7) & (data['sleep_duration'] <= 8)]) / len(data)
+    if 'sleep_duration_hours' in data.columns:
+        duration_data = data['sleep_duration_hours'].dropna()
+        avg_duration = duration_data.mean()
+        target_achievement = len(duration_data[(duration_data >= 7) & (duration_data <= 9)]) / len(duration_data)
         
         if avg_duration < 7:
-            recommendations.append(" **Increase Sleep Duration**: Your average sleep is below the recommended 7-8 hours. Consider earlier bedtimes.")
-        elif avg_duration > 8.5:
-            recommendations.append(" **Optimize Sleep Duration**: You may be oversleeping. Try maintaining 7-8 hours for better sleep efficiency.")
+            recommendations.append("💤 **Increase Sleep Duration**: Your average sleep is below the recommended 7-9 hours. Consider earlier bedtimes.")
+        elif avg_duration > 9.5:
+            recommendations.append("⏰ **Optimize Sleep Duration**: You may be oversleeping. Try maintaining 7-9 hours for better sleep efficiency.")
         
         if target_achievement < 0.7:
-            recommendations.append(f" **Consistency Goal**: Currently {target_achievement:.0%} of nights meet the 7-8 hour target. Aim for 70%+ consistency.")
+            recommendations.append(f"🎯 **Consistency Goal**: Currently {target_achievement:.0%} of nights meet the 7-9 hour target. Aim for 70%+ consistency.")
     
     if 'sleep_quality' in data.columns:
-        avg_quality = data['sleep_quality'].mean()
-        quality_std = data['sleep_quality'].std()
+        quality_data = data['sleep_quality'].dropna()
+        avg_quality = quality_data.mean()
+        quality_std = quality_data.std()
         
-        if avg_quality < 6:
-            recommendations.append(" **Improve Sleep Quality**: Average quality is below 6/10. Consider sleep hygiene improvements.")
+        if avg_quality < 3.5:  # Adjusted for 1-5 scale
+            recommendations.append("🔧 **Improve Sleep Quality**: Average quality is below 3.5/5. Consider sleep hygiene improvements.")
         
-        if quality_std > 1.5:
-            recommendations.append(" **Reduce Variability**: Sleep quality varies significantly. Look for patterns affecting consistency.")
+        if quality_std > 0.8:  # Adjusted for 1-5 scale
+            recommendations.append("📊 **Reduce Variability**: Sleep quality varies significantly. Look for patterns affecting consistency.")
+    
+    # Add objective sleep quality recommendations if available
+    objective_data = sleep_quality_data.get('objective_quality', {})
+    if objective_data and 'components' in objective_data:
+        components = objective_data['components']
+        
+        # Check which components need improvement
+        weak_components = []
+        for comp_name, comp_score in components.items():
+            if comp_score < 0.6:  # Below 60%
+                component_display = comp_name.replace('_score', '').replace('_', ' ').title()
+                weak_components.append(component_display)
+        
+        if weak_components:
+            recommendations.append(f"⚡ **Focus Areas**: Your {', '.join(weak_components).lower()} score(s) could be improved through better sleep habits.")
+        
+        # Specific recommendations based on component scores
+        if components.get('timing_score', 1) < 0.6:
+            recommendations.append("🕒 **Optimize Sleep Timing**: Try sleeping between 10 PM - 12 AM and waking between 6-8 AM for better circadian alignment.")
+        
+        if components.get('regularity_score', 1) < 0.6:
+            recommendations.append("📅 **Improve Consistency**: Maintain regular sleep and wake times, even on weekends, to strengthen your circadian rhythm.")
+        
+        if components.get('duration_score', 1) < 0.6:
+            recommendations.append("⏱️ **Duration Optimization**: Aim for 7-9 hours of sleep consistently to maximize recovery and cognitive function.")
     
     # Sleep trend analysis
-    if 'sleep_duration' in data.columns and len(data) >= 7:
-        duration_trend = trend_significance(data['sleep_duration'])
-        if duration_trend['significant']:
-            if duration_trend['direction'] == 'improving':
-                recommendations.append(" **Positive Trend**: Your sleep duration is improving - keep up the good habits!")
-            elif duration_trend['direction'] == 'declining':
-                recommendations.append(" **Concerning Trend**: Sleep duration is declining. Consider what changes might be affecting your sleep.")
+    if 'sleep_duration_hours' in data.columns and len(data) >= 7:
+        try:
+            duration_trend = trend_significance(data['sleep_duration_hours'])
+            if duration_trend.get('significant'):
+                if duration_trend.get('trend_direction') == 'improving':
+                    recommendations.append("📈 **Positive Trend**: Your sleep duration is improving - keep up the good habits!")
+                elif duration_trend.get('trend_direction') == 'declining':
+                    recommendations.append("📉 **Concerning Trend**: Sleep duration is declining. Consider what changes might be affecting your sleep.")
+        except Exception:
+            pass  # Skip trend analysis if data insufficient
     
     if not recommendations:
-        recommendations.append("✓ **Great Job**: Your sleep patterns look healthy! Continue maintaining consistent sleep habits.")
+        recommendations.append("✅ **Excellent Work**: Your sleep patterns look healthy! Continue maintaining consistent sleep habits.")
     
     for rec in recommendations:
         st.markdown(f"""

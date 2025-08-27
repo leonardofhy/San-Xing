@@ -263,6 +263,7 @@ def main():
         st.divider()
     
     # 2. Statistical Insights
+    numeric_cols = kpi_data.select_dtypes(include=[np.number]) if kpi_data is not None else pd.DataFrame()
     if len(numeric_cols.columns) > 1:
         render_statistical_insights(
             correlations, 

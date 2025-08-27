@@ -161,11 +161,22 @@ class DataProcessor:
             return None
         
         time_str = str(value).strip()
+        
         # Match HH:MM:SS or HH:MM format
         time_match = re.match(r'(\d{1,2}):(\d{2})(?::\d{2})?', time_str)
         if time_match:
             hour, minute = time_match.groups()
-            return f"{int(hour):02d}:{int(minute):02d}"
+            hour_int, minute_int = int(hour), int(minute)
+            if 0 <= hour_int <= 23 and 0 <= minute_int <= 59:  # Validate time
+                return f"{hour_int:02d}:{minute_int:02d}"
+        
+        # Match HHMM format (4 digits)
+        if re.match(r'^\d{4}$', time_str) and len(time_str) == 4:
+            hour = int(time_str[:2])
+            minute = int(time_str[2:])
+            if 0 <= hour <= 23 and 0 <= minute <= 59:  # Validate time
+                return f"{hour:02d}:{minute:02d}"
+        
         return None
         
     def _parse_activity_list(self, value: Any) -> List[str]:

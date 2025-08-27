@@ -570,3 +570,371 @@ def create_statistical_summary_chart(data: pd.DataFrame,
     )
     
     return fig
+
+
+def create_sleep_quality_comparison(sleep_data: Dict[str, Any], 
+                                   historical_data: Optional[pd.DataFrame] = None,
+                                   title: str = "Sleep Quality Analysis") -> go.Figure:
+    """Create a visualization comparing subjective and objective sleep quality.
+    
+    Args:
+        sleep_data: Sleep quality analysis results from KPICalculator
+        historical_data: Optional DataFrame with historical sleep data
+        title: Chart title
+        
+    Returns:
+        Plotly Figure object
+    """
+    if 'error' in sleep_data:
+        # Create empty figure with error message
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"Sleep Quality Data Error:<br>{sleep_data['error']}",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=16, color="red")
+        )
+        fig.update_layout(
+            title=title,
+            height=300,
+            margin=dict(l=50, r=50, t=80, b=50)
+        )
+        return fig
+    
+    # Extract data
+    subjective_avg = sleep_data.get('subjective_avg')
+    objective_data = sleep_data.get('objective_quality', {})
+    objective_quality = objective_data.get('objective_sleep_quality')
+    correlation = sleep_data.get('comparison', {}).get('correlation')
+    
+    # Create comparison chart
+    fig = go.Figure()
+    
+    if subjective_avg is not None and objective_quality is not None:
+        # Both ratings available - create comparison
+        categories = ['Subjective Rating', 'Objective Score']
+        values = [subjective_avg, objective_quality]
+        colors = ['#6f42c1', '#28a745']
+        
+        # Add bars
+        fig.add_trace(go.Bar(
+            x=categories,
+            y=values,
+            marker_color=colors,
+            text=[f"{val:.1f}/5" for val in values],
+            textposition='auto',
+            hovertemplate="<b>%{x}</b><br>Rating: %{y:.2f}/5<extra></extra>"
+        ))
+        
+        # Add correlation annotation if available
+        if correlation is not None:
+            correlation_desc = "Strong" if abs(correlation) > 0.7 else "Moderate" if abs(correlation) > 0.3 else "Weak"
+            fig.add_annotation(
+                x=0.5, y=max(values) * 0.8,
+                xref="x", yref="y",
+                text=f"Agreement: {correlation_desc}<br>(r = {correlation:.3f})",
+                showarrow=False,
+                bgcolor="rgba(255,255,255,0.8)",
+                bordercolor="gray",
+                borderwidth=1,
+                font=dict(size=12)
+            )
+        
+        fig.update_layout(
+            yaxis=dict(range=[0, 5], title="Sleep Quality Rating"),
+            xaxis_title="Rating Type"
+        )
+    
+    elif subjective_avg is not None:
+        # Only subjective rating
+        fig.add_trace(go.Bar(
+            x=['Subjective Rating'],
+            y=[subjective_avg],
+            marker_color='#6f42c1',
+            text=f"{subjective_avg:.1f}/5",
+            textposition='auto',
+            hovertemplate="<b>Subjective Rating</b><br>Rating: %{y:.2f}/5<extra></extra>"
+        ))
+        
+        fig.update_layout(
+            yaxis=dict(range=[0, 5], title="Sleep Quality Rating"),
+            xaxis_title="Rating Type"
+        )
+    
+    elif objective_quality is not None:
+        # Only objective rating
+        fig.add_trace(go.Bar(
+            x=['Objective Score'],
+            y=[objective_quality],
+            marker_color='#28a745',
+            text=f"{objective_quality:.1f}/5",
+            textposition='auto',
+            hovertemplate="<b>Objective Score</b><br>Rating: %{y:.2f}/5<extra></extra>"
+        ))
+        
+        fig.update_layout(
+            yaxis=dict(range=[0, 5], title="Sleep Quality Rating"),
+            xaxis_title="Rating Type"
+        )
+    
+    # Update layout
+    fig.update_layout(
+        title={
+            'text': title,
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 18, 'color': '#2c3e50'}
+        },
+        height=400,
+        margin=dict(l=50, r=50, t=80, b=50),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        showlegend=False
+    )
+    
+    return fig
+
+
+def create_sleep_components_radar(objective_data: Dict[str, Any],
+                                 title: str = "Sleep Quality Components") -> go.Figure:
+    """Create a radar chart showing objective sleep quality components.
+    
+    Args:
+        objective_data: Objective sleep quality data from SleepQualityCalculator
+        title: Chart title
+        
+    Returns:
+        Plotly Figure object
+    """
+    if 'components' not in objective_data:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No component data available",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=16)
+        )
+        return fig
+    
+    components = objective_data['components']
+    
+    # Map component keys to display names
+    component_mapping = {
+        'duration_score': 'Duration',
+        'timing_score': 'Timing',
+        'regularity_score': 'Regularity', 
+        'efficiency_score': 'Efficiency'
+    }
+    
+    # Extract values (convert from 0-1 to 0-100 scale for better visualization)
+    values = []
+    actual_names = []
+    
+    for comp_key, display_name in component_mapping.items():
+        if comp_key in components:
+            values.append(components[comp_key] * 100)  # Convert to percentage
+            actual_names.append(display_name)
+    
+    if not values:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No component scores available",
+            xref="paper", yref="paper", 
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=16)
+        )
+        return fig
+    
+    # Create radar chart
+    fig = go.Figure()
+    
+    fig.add_trace(go.Scatterpolar(
+        r=values + [values[0]],  # Close the polygon
+        theta=actual_names + [actual_names[0]], 
+        fill='toself',
+        fillcolor='rgba(40, 167, 69, 0.3)',
+        line_color='rgba(40, 167, 69, 0.8)',
+        line_width=3,
+        marker=dict(size=8, color='rgba(40, 167, 69, 1)'),
+        name='Sleep Quality',
+        hovertemplate="<b>%{theta}</b><br>Score: %{r:.1f}%<extra></extra>"
+    ))
+    
+    # Update layout
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 100],
+                tickmode='linear',
+                tick0=0,
+                dtick=20,
+                ticksuffix='%'
+            ),
+            angularaxis=dict(
+                tickfont=dict(size=12)
+            )
+        ),
+        title={
+            'text': title,
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 18, 'color': '#2c3e50'}
+        },
+        height=500,
+        margin=dict(l=50, r=50, t=80, b=50),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        showlegend=False
+    )
+    
+    return fig
+
+
+def create_sleep_timing_chart(data: pd.DataFrame, 
+                             title: str = "Sleep Timing Patterns") -> go.Figure:
+    """Create a visualization showing sleep timing patterns over time.
+    
+    Args:
+        data: DataFrame with sleep timing data (sleep_bedtime, wake_time, logical_date)
+        title: Chart title
+        
+    Returns:
+        Plotly Figure object
+    """
+    # Filter data with both bedtime and wake time
+    sleep_data = data.dropna(subset=['sleep_bedtime', 'wake_time']).copy()
+    
+    if sleep_data.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No sleep timing data available",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=16)
+        )
+        return fig
+    
+    # Convert time strings to datetime for plotting
+    def time_to_minutes(time_str):
+        """Convert HH:MM to minutes since midnight"""
+        try:
+            hours, minutes = map(int, time_str.split(':'))
+            return hours * 60 + minutes
+        except:
+            return None
+    
+    sleep_data['bedtime_minutes'] = sleep_data['sleep_bedtime'].apply(time_to_minutes)
+    sleep_data['wake_minutes'] = sleep_data['wake_time'].apply(time_to_minutes)
+    
+    # Remove invalid conversions
+    sleep_data = sleep_data.dropna(subset=['bedtime_minutes', 'wake_minutes'])
+    
+    if sleep_data.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Could not parse sleep timing data",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=16)
+        )
+        return fig
+    
+    # Create the plot
+    fig = go.Figure()
+    
+    # Add bedtime line
+    fig.add_trace(go.Scatter(
+        x=sleep_data['logical_date'],
+        y=sleep_data['bedtime_minutes'],
+        mode='lines+markers',
+        name='Bedtime',
+        line=dict(color='#dc3545', width=2),
+        marker=dict(size=6),
+        hovertemplate="<b>Bedtime</b><br>Date: %{x}<br>Time: %{text}<extra></extra>",
+        text=sleep_data['sleep_bedtime']
+    ))
+    
+    # Add wake time line
+    fig.add_trace(go.Scatter(
+        x=sleep_data['logical_date'],
+        y=sleep_data['wake_minutes'],
+        mode='lines+markers',
+        name='Wake Time',
+        line=dict(color='#ffc107', width=2),
+        marker=dict(size=6),
+        hovertemplate="<b>Wake Time</b><br>Date: %{x}<br>Time: %{text}<extra></extra>",
+        text=sleep_data['wake_time']
+    ))
+    
+    # Add optimal ranges as shaded areas
+    fig.add_hrect(
+        y0=22*60, y1=24*60,  # 10 PM to midnight
+        fillcolor="rgba(40, 167, 69, 0.2)",
+        layer="below",
+        line_width=0,
+        annotation_text="Optimal Bedtime",
+        annotation_position="left"
+    )
+    
+    fig.add_hrect(
+        y0=6*60, y1=8*60,  # 6 AM to 8 AM
+        fillcolor="rgba(255, 193, 7, 0.2)",
+        layer="below", 
+        line_width=0,
+        annotation_text="Optimal Wake Time",
+        annotation_position="left"
+    )
+    
+    # Update layout with custom y-axis formatting
+    fig.update_layout(
+        title={
+            'text': title,
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 18, 'color': '#2c3e50'}
+        },
+        xaxis_title="Date",
+        yaxis_title="Time of Day",
+        height=500,
+        margin=dict(l=50, r=50, t=80, b=50),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        hovermode='x unified',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right", 
+            x=1
+        )
+    )
+    
+    # Custom y-axis with time labels
+    time_ticks = []
+    time_labels = []
+    
+    # Create 4-hour intervals
+    for hour in range(0, 24, 4):
+        time_ticks.append(hour * 60)
+        time_labels.append(f"{hour:02d}:00")
+    
+    # Add midnight and noon markers
+    time_ticks.extend([0, 12*60])
+    time_labels.extend(["00:00", "12:00"])
+    
+    fig.update_yaxes(
+        tickmode='array',
+        tickvals=sorted(set(time_ticks)),
+        ticktext=[time_labels[i] for i, _ in enumerate(sorted(set(time_ticks)))],
+        gridcolor='lightgray'
+    )
+    
+    fig.update_xaxes(gridcolor='lightgray')
+    
+    return fig

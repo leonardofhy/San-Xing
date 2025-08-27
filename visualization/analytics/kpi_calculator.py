@@ -11,6 +11,7 @@ All calculations include confidence levels based on sample sizes and statistical
 from typing import Dict, Any, Optional
 import pandas as pd
 import numpy as np
+from .sleep_quality_calculator import SleepQualityCalculator
 from datetime import datetime, timedelta
 
 
@@ -309,7 +310,7 @@ class KPICalculator:
     
     @classmethod
     def calculate_all_kpis(cls, df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
-        """Calculate all three KPIs in one call.
+        """Calculate all KPIs in one call.
         
         Args:
             df: DataFrame with all required columns
@@ -318,13 +319,80 @@ class KPICalculator:
             dict: {
                 'wellbeing_score': {...},
                 'balance_index': {...},
-                'trend_indicator': {...}
+                'trend_indicator': {...},
+                'sleep_quality_analysis': {...}
             }
         """
+        results = {}
+        
+        try:
+            results['wellbeing_score'] = cls.calculate_wellbeing_score(df)
+        except Exception as e:
+            results['wellbeing_score'] = cls._empty_kpi_result('wellbeing_score', str(e))
+        
+        try:
+            results['balance_index'] = cls.calculate_balance_index(df)
+        except Exception as e:
+            results['balance_index'] = cls._empty_kpi_result('balance_index', str(e))
+        
+        try:
+            results['trend_indicator'] = cls.calculate_trend_indicator(df)
+        except Exception as e:
+            results['trend_indicator'] = cls._empty_kpi_result('trend_indicator', str(e))
+        
+        try:
+            results['sleep_quality_analysis'] = cls.calculate_sleep_quality_analysis(df)
+        except Exception as e:
+            results['sleep_quality_analysis'] = cls._empty_kpi_result('sleep_quality_analysis', str(e))
+        
+        return results
+    
+    @classmethod
+    def calculate_sleep_quality_analysis(cls, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Calculate comprehensive sleep quality analysis (both subjective and objective)
+        
+        Args:
+            df: DataFrame with sleep timing and rating data
+            
+        Returns:
+            dict: Sleep quality analysis with both subjective and objective metrics
+        """
+        if df.empty:
+            return cls._empty_kpi_result('sleep_quality_analysis')
+        
+        # Calculate objective sleep quality
+        objective_result = SleepQualityCalculator.calculate_objective_sleep_quality(df)
+        
+        # Get subjective sleep quality stats if available
+        subjective_stats = {}
+        if 'sleep_quality' in df.columns:
+            subj_data = df['sleep_quality'].dropna()
+            if len(subj_data) > 0:
+                subjective_stats = {
+                    'avg_rating': float(subj_data.mean()),
+                    'rating_std': float(subj_data.std()) if len(subj_data) > 1 else 0.0,
+                    'sample_size': len(subj_data),
+                    'rating_range': [float(subj_data.min()), float(subj_data.max())]
+                }
+        
+        # Compare subjective vs objective if both available
+        comparison_result = {}
+        if subjective_stats and 'objective_sleep_quality' in objective_result and objective_result['objective_sleep_quality'] is not None:
+            comparison_result = SleepQualityCalculator.compare_subjective_vs_objective(df)
+        
+        # Calculate confidence based on data availability
+        sample_size = objective_result.get('metrics', {}).get('sample_size', 0)
+        confidence = cls._calculate_confidence(sample_size, 7)  # 7 days minimum for sleep analysis
+        
         return {
-            'wellbeing_score': cls.calculate_wellbeing_score(df),
-            'balance_index': cls.calculate_balance_index(df),
-            'trend_indicator': cls.calculate_trend_indicator(df)
+            'objective_quality': objective_result,  # Return full objective result
+            'subjective_avg': subjective_stats.get('avg_rating'),  # Add subjective average
+            'subjective_stats': subjective_stats,
+            'comparison': comparison_result,
+            'confidence': confidence,
+            'sample_size': sample_size,
+            'kpi_type': 'sleep_quality_analysis'
         }
     
     @staticmethod
@@ -400,7 +468,7 @@ class KPICalculator:
             return 'stable'
     
     @staticmethod
-    def _empty_kpi_result(kpi_type: str) -> Dict[str, Any]:
+    def _empty_kpi_result(kpi_type: str, error_msg: str = None) -> Dict[str, Any]:
         """Return empty/default KPI result structure.
         
         Args:
@@ -414,6 +482,9 @@ class KPICalculator:
             'confidence': 0.0,
             'kpi_type': kpi_type
         }
+        
+        if error_msg:
+            base_result['error'] = error_msg
         
         if kpi_type == 'wellbeing_score':
             return {
@@ -436,6 +507,13 @@ class KPICalculator:
                 'magnitude': 0.0,
                 'significance': 1.0,
                 'confidence': 'low'
+            }
+        elif kpi_type == 'sleep_quality_analysis':
+            return {
+                **base_result,
+                'subjective_avg': None,
+                'objective_quality': {},
+                'comparison': {}
             }
         else:
             return base_result
