@@ -217,17 +217,157 @@ def main():
         else:
             st.metric("Completeness", "N/A")
     
-    # Show raw data preview if requested
+    # Show raw data preview with filtering if requested
     if show_raw_data:
-        with st.expander("📋 Raw Data Preview", expanded=False):
-            st.dataframe(kpi_data.head(20))
-            st.write(f"**Dataset shape:** {kpi_data.shape[0]} entries × {kpi_data.shape[1]} columns")
+        with st.expander("📋 Interactive Raw Data Explorer", expanded=False):
+            st.markdown("### 🔍 Filter & Explore Your Data")
             
-            # Show column info
-            st.write("**Column Information:**")
-            for col in kpi_data.columns:
-                non_null_count = kpi_data[col].count()
-                st.write(f"- {col}: {non_null_count}/{len(kpi_data)} non-null ({non_null_count/len(kpi_data)*100:.0f}%)")
+            # Create filter controls
+            filter_col1, filter_col2, filter_col3 = st.columns(3)
+            
+            with filter_col1:
+                # Date range filter
+                if 'date' in kpi_data.columns and not kpi_data['date'].isna().all():
+                    min_date = kpi_data['date'].min()
+                    max_date = kpi_data['date'].max()
+                    
+                    date_range = st.date_input(
+                        "📅 Date Range",
+                        value=(min_date, max_date),
+                        min_value=min_date,
+                        max_value=max_date
+                    )
+                    
+                    # Apply date filter
+                    if isinstance(date_range, tuple) and len(date_range) == 2:
+                        start_date, end_date = date_range
+                        filtered_data = kpi_data[
+                            (kpi_data['date'] >= pd.Timestamp(start_date)) & 
+                            (kpi_data['date'] <= pd.Timestamp(end_date))
+                        ].copy()
+                    else:
+                        filtered_data = kpi_data.copy()
+                else:
+                    st.info("No date column available for filtering")
+                    filtered_data = kpi_data.copy()
+            
+            with filter_col2:
+                # Column selection
+                available_cols = list(kpi_data.columns)
+                key_cols = ['date', 'mood', 'energy', 'sleep_quality', 'sleep_bedtime', 'wake_time', 'sleep_duration_hours']
+                default_cols = [col for col in key_cols if col in available_cols]
+                
+                selected_columns = st.multiselect(
+                    "📊 Columns to Display",
+                    options=available_cols,
+                    default=default_cols if default_cols else available_cols[:8],
+                    help="Choose which columns to display in the data table"
+                )
+            
+            with filter_col3:
+                # Data quality filter
+                quality_filter = st.selectbox(
+                    "🎯 Data Quality Filter",
+                    options=["All Records", "Complete Sleep Data", "Complete Mood/Energy", "Records with Notes"],
+                    help="Filter records based on data completeness"
+                )
+            
+            # Apply quality filter
+            if quality_filter == "Complete Sleep Data":
+                sleep_cols = ['sleep_bedtime', 'wake_time']
+                available_sleep_cols = [col for col in sleep_cols if col in filtered_data.columns]
+                if available_sleep_cols:
+                    filtered_data = filtered_data.dropna(subset=available_sleep_cols)
+                    
+            elif quality_filter == "Complete Mood/Energy":
+                mood_energy_cols = ['mood', 'energy']
+                available_me_cols = [col for col in mood_energy_cols if col in filtered_data.columns]
+                if available_me_cols:
+                    filtered_data = filtered_data.dropna(subset=available_me_cols)
+                    
+            elif quality_filter == "Records with Notes":
+                note_cols = ['diary_text', 'notes', 'reflection']
+                available_note_cols = [col for col in note_cols if col in filtered_data.columns]
+                if available_note_cols:
+                    filtered_data = filtered_data.dropna(subset=available_note_cols)
+            
+            # Display filtered data
+            if selected_columns and not filtered_data.empty:
+                display_cols = [col for col in selected_columns if col in filtered_data.columns]
+                display_data = filtered_data[display_cols].copy()
+                
+                # Sort by date if available
+                if 'date' in display_data.columns:
+                    display_data = display_data.sort_values('date', ascending=False)
+                
+                st.markdown(f"### 📋 Filtered Data ({len(display_data)} records)")
+                st.dataframe(
+                    display_data,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=400
+                )
+                
+                # Summary stats
+                summary_col1, summary_col2, summary_col3 = st.columns(3)
+                
+                with summary_col1:
+                    st.metric("📊 Records Shown", len(display_data))
+                    
+                with summary_col2:
+                    if 'date' in display_data.columns and len(display_data) > 0:
+                        date_span = (display_data['date'].max() - display_data['date'].min()).days + 1
+                        st.metric("📅 Date Span", f"{date_span} days")
+                    else:
+                        st.metric("📅 Date Span", "N/A")
+                
+                with summary_col3:
+                    completeness = (1 - display_data.isnull().sum().sum() / (len(display_data) * len(display_data.columns))) * 100
+                    st.metric("✅ Completeness", f"{completeness:.0f}%")
+                
+                # Column statistics
+                st.markdown("### 📈 Column Statistics")
+                stats_data = []
+                for col in display_cols:
+                    col_data = display_data[col]
+                    non_null_count = col_data.count()
+                    
+                    if pd.api.types.is_numeric_dtype(col_data):
+                        mean_val = col_data.mean() if non_null_count > 0 else None
+                        stats_data.append({
+                            'Column': col,
+                            'Non-null Count': f"{non_null_count}/{len(display_data)}",
+                            'Completeness': f"{non_null_count/len(display_data)*100:.0f}%",
+                            'Type': 'Numeric',
+                            'Mean': f"{mean_val:.2f}" if mean_val is not None else "N/A"
+                        })
+                    else:
+                        unique_count = col_data.nunique()
+                        stats_data.append({
+                            'Column': col,
+                            'Non-null Count': f"{non_null_count}/{len(display_data)}",
+                            'Completeness': f"{non_null_count/len(display_data)*100:.0f}%",
+                            'Type': 'Text/Categorical',
+                            'Unique Values': unique_count
+                        })
+                
+                st.dataframe(pd.DataFrame(stats_data), hide_index=True, use_container_width=True)
+                
+            else:
+                st.warning("⚠️ No data to display with current filters")
+            
+            # Raw data export option
+            st.markdown("### 💾 Export Options")
+            if st.button("📥 Download Filtered Data as CSV"):
+                if not filtered_data.empty and selected_columns:
+                    export_data = filtered_data[display_cols]
+                    csv = export_data.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download CSV",
+                        data=csv,
+                        file_name=f"san_xing_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
     
     # === ANALYTICS PROCESSING ===
     
