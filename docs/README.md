@@ -40,6 +40,7 @@ Requirements, design specifications, and system requirements documentation.
 
 ### 📝 Root Level
 - [`issues.md`](issues.md) - Known issues and tracking
+- [`DATA_SECURITY.md`](DATA_SECURITY.md) - 🔒 Data privacy and security measures
 
 ## 🎯 Quick Navigation
 

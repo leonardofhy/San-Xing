@@ -24,22 +24,99 @@ service_account.json
 # Allow the public example config
 !config.example.toml
 
+# ===== DATA SECURITY SECTION =====
+# Comprehensive protection against uploading personal data to GitHub
+
 # Generated data artifacts (snapshots, insights, intermediate JSON)
 data/
+**/data/
+data-*/
+backup-*/
+export-*/
+
+# Raw data files (any format, any location)
+**/raw_data.*
+**/snapshot*.*
+**/entries-*.*
+**/processed_data.*
+**/analysis_data.*
+**/diary_data.*
+**/personal_data.*
+
+# Common data file extensions (be careful not to block legitimate configs)
+*.csv
+*.xlsx
+*.xls
+*.parquet
+*.arrow
+*.feather
+*.pkl
+*.pickle
+*.db
+*.sqlite
+*.sqlite3
+
+# Specific data JSON files (but allow config JSONs)
+**/data*.json
+**/snapshot*.json
+**/entries*.json
+**/insights*.json
+**/processed*.json
+**/export*.json
+**/diary*.json
+**/personal*.json
+raw_data.json
+analysis_results.json
+
+# HuggingFace dataset exports
+**/hf-dataset/
+**/dataset/
+**/datasets/
+*.hf
+
+# Temporary data processing files
+temp_data_*
+tmp_*
+cache_*
+*_cache/
+*.tmp
+
+# Google Sheets downloads
+*sheets_data*
+*google_sheets*
+*download_*.csv
+*export_*.xlsx
 
 # Generated visualization outputs (plots)
 visualization/*.png
-# Explicit plot filenames (in case scripts are run from repo root and output here)
-sleep_duration_trends.png
-sleep_quality_correlation.png
-activities_vs_mood.png
-activity_trends.png
-top_activities.png
-weekly_patterns.png
-health_dashboard.png
-correlation_heatmap.png
-screen_time_vs_sleep.png
+visualization/*.jpg
+visualization/*.jpeg
+visualization/*.svg
+visualization/*.pdf
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
+
+# Explicit plot filenames (in case scripts are run from repo root)
+sleep_duration_trends.*
+sleep_quality_correlation.*
+activities_vs_mood.*
+activity_trends.*
+top_activities.*
+weekly_patterns.*
+health_dashboard.*
+correlation_heatmap.*
+screen_time_vs_sleep.*
+
+# Personal logs and notes
+**/logs/
+*.log
+**/notes/
+personal_notes.*
+diary_entries.*
+
+# ===== END DATA SECURITY SECTION =====
 
 CLAUDE.md
-
-visualization/raw_data.json
