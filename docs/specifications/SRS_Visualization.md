@@ -1,8 +1,8 @@
 # Software Requirements Specification (SRS)
 ## San-Xing Visualization Dashboard
 
-**Document Version:** 1.0  
-**Date:** August 26, 2025  
+**Document Version:** 2.0  
+**Date:** August 27, 2025  
 **Project:** San-Xing (三省) - Personal Analytics Visualization System  
 
 ---
@@ -14,21 +14,23 @@ This document specifies the software requirements for the San-Xing Visualization
 
 ### 1.2 Scope
 The visualization system encompasses:
-- Interactive web dashboard built with Streamlit
-- Multi-source data integration (JSON files and Google Sheets)
-- Real-time health metrics visualization
-- Activity pattern analysis
-- Sleep quality tracking
-- Correlation analysis tools
-- Responsive design for multiple devices
+- **Bulletproof Interactive Dashboard** built with Streamlit with robust data loading fallbacks
+- **Multi-format Data Integration** supporting JSON snapshots, Google Sheets, and synthetic data
+- **Comprehensive KPI Analytics** including wellbeing scoring, balance indices, and trend analysis
+- **Advanced Sleep Quality Analysis** with both objective and subjective metrics
+- **Interactive Raw Data Explorer** with date filtering and CSV export capabilities
+- **Statistical Significance Testing** with correlation analysis and confidence intervals
+- **Modular Component Architecture** with reusable UI components and analytics modules
 
 ### 1.3 Definitions and Acronyms
 - **San-Xing (三省)**: "Three daily examinations" - Confucian self-reflection practice
-- **Dashboard**: Interactive web interface for data visualization
-- **DataProcessor**: Backend module for processing raw diary data
+- **Dashboard**: Bulletproof interactive web interface for data visualization
+- **DataProcessor**: Enhanced backend module processing multiple time formats and Chinese field mapping
+- **RobustDataLoader**: Fallback system ensuring dashboard always functions with real or synthetic data
+- **KPICalculator**: Advanced analytics engine computing wellbeing scores and trend indicators
+- **SleepQualityCalculator**: Specialized module for objective sleep analysis using timing patterns
 - **Streamlit**: Python web application framework
-- **JSON**: JavaScript Object Notation data format
-- **CSV**: Comma-Separated Values file format
+- **Plotly**: Interactive charting library for dashboard visualizations
 
 ### 1.4 References
 - San-Xing Main SRS: `docs/SRS_SanXing.md`
@@ -77,55 +79,75 @@ Primary functions include:
 
 ## 3. System Features
 
-### 3.1 Data Integration System
+### 3.1 Bulletproof Data Integration System
 
 #### 3.1.1 Description
-Dual-source data integration supporting both static JSON files and live Google Sheets connectivity.
+Robust multi-source data integration with intelligent fallbacks ensuring dashboard always functions.
 
 #### 3.1.2 Functional Requirements
-- **REQ-3.1.1**: System SHALL load data from JSON files in standardized format
-- **REQ-3.1.2**: System SHALL connect to Google Sheets via service account authentication
-- **REQ-3.1.3**: System SHALL automatically detect and use latest data snapshots
-- **REQ-3.1.4**: System SHALL provide fallback from Google Sheets to JSON when connectivity fails
-- **REQ-3.1.5**: System SHALL normalize column names between different data sources
-- **REQ-3.1.6**: System SHALL cache data for 5 minutes to improve performance
+- **REQ-3.1.1**: System SHALL load data from processed snapshots via enhanced DataProcessor
+- **REQ-3.1.2**: System SHALL connect to Google Sheets with proper Chinese field mapping
+- **REQ-3.1.3**: System SHALL handle multiple time formats (HH:MM:SS and HHMM) automatically
+- **REQ-3.1.4**: System SHALL provide intelligent fallback hierarchy: Real Data → Synthetic Data → Emergency Data
+- **REQ-3.1.5**: System SHALL map Chinese column names to English field names seamlessly
+- **REQ-3.1.6**: System SHALL validate sleep timing data with realistic duration checks (2-16 hours)
+- **REQ-3.1.7**: System SHALL handle cross-midnight sleep calculations correctly
+- **REQ-3.1.8**: System SHALL never crash - always display functional dashboard with clear data source indicators
 
 #### 3.1.3 Input Specifications
-**JSON Format:**
+**Enhanced Data Processing Formats:**
 ```json
 {
   "Timestamp": "DD/MM/YYYY HH:MM:SS",
   "今日整體心情感受": "1-10 numeric scale",
-  "今日整體精力水平如何？": "1-10 numeric scale",
+  "今日整體精力水平如何？": "1-10 numeric scale", 
   "昨晚睡眠品質如何？": "1-10 numeric scale",
+  "昨晚實際入睡時間": "HH:MM:SS or HHMM format",
+  "今天實際起床時間": "HH:MM:SS or HHMM format",
   "今天完成了哪些？": "Comma-separated activity list",
   "體重紀錄": "Numeric weight in kg",
   "今日手機螢幕使用時間": "Numeric hours"
 }
 ```
 
-**Google Sheets Format:**
-- Service account JSON authentication
-- Spreadsheet ID configuration
-- Tab name specification (default: "MetaLog")
+**Time Format Support:**
+- **HH:MM:SS Format**: "04:40:00", "23:07:00" (standard format)
+- **HHMM Format**: "0420", "2307" (compact format from Google Sheets)
+- **Validation**: Automatic validation of hours (0-23) and minutes (0-59)
 
-### 3.2 Key Performance Indicators (KPIs) Dashboard
+**Chinese Column Mapping:**
+- `昨晚實際入睡時間` → `sleep_bedtime`
+- `今天實際起床時間` → `wake_time`
+- `昨晚睡眠品質如何？` → `sleep_quality`
+
+### 3.2 Enhanced Key Performance Indicators (KPIs) Dashboard
 
 #### 3.2.1 Description
-Simplified KPI system displaying three primary wellness indicators with actionable insights.
+Comprehensive KPI system displaying four primary wellness indicators with detailed explanations and actionable insights.
 
 #### 3.2.2 Functional Requirements
-- **REQ-3.2.1**: System SHALL display 3 primary KPI cards (Wellbeing Score, Balance Index, Trend Indicator)
-- **REQ-3.2.2**: System SHALL calculate composite Wellbeing Score from mood, energy, and sleep quality
-- **REQ-3.2.3**: System SHALL compute Balance Index from activity balance and sleep goal achievement
-- **REQ-3.2.4**: System SHALL determine 7-day trend direction with statistical significance
-- **REQ-3.2.5**: System SHALL display top 3 statistically significant insights below KPIs
-- **REQ-3.2.6**: System SHALL handle missing data gracefully with confidence indicators
+- **REQ-3.2.1**: System SHALL display 4 primary KPI cards (Wellbeing Score, Balance Index, Trend Indicator, Sleep Quality)
+- **REQ-3.2.2**: System SHALL calculate composite Wellbeing Score from mood and energy levels with data quality indicators
+- **REQ-3.2.3**: System SHALL compute Balance Index from activity balance and life balance metrics  
+- **REQ-3.2.4**: System SHALL determine trend direction using statistical significance testing
+- **REQ-3.2.5**: System SHALL provide both objective and subjective sleep quality analysis
+- **REQ-3.2.6**: System SHALL include expandable explanations for each KPI with "ℹ️ What is..." sections
+- **REQ-3.2.7**: System SHALL handle missing data gracefully with appropriate fallback messages
+- **REQ-3.2.8**: System SHALL display confidence levels and sample sizes for statistical metrics
 
 #### 3.2.3 KPI Definitions
-1. **Wellbeing Score**: Composite metric (mood × 0.4 + energy × 0.4 + sleep_quality × 0.2)
-2. **Balance Index**: Activity balance achievement + sleep duration goal percentage
-3. **Trend Indicator**: 7-day moving direction with confidence level (improving/stable/declining)
+1. **Wellbeing Score (0-10)**: Combines mood and energy levels with weighted average calculation
+2. **Balance Index (0-100%)**: Measures life balance between activities, sleep, and overall wellness
+3. **Trend Indicator**: Statistical trend analysis showing improving/stable/declining patterns with confidence
+4. **Sleep Quality (1-5)**: Dual analysis combining subjective ratings and objective timing-based calculations
+
+#### 3.2.4 Sleep Quality Analysis Components
+- **Subjective Analysis**: User-reported sleep quality ratings
+- **Objective Analysis**: Calculated from sleep timing patterns with 4 components:
+  - Duration Score (40%): Optimal 7-9 hours range
+  - Timing Score (30%): Circadian rhythm alignment
+  - Regularity Score (20%): Sleep schedule consistency  
+  - Efficiency Score (10%): Weekend vs weekday patterns
 
 ### 3.3 Activity Impact Analysis
 
@@ -186,18 +208,34 @@ Statistical analysis system that identifies and presents top 3 actionable insigh
 - **Sleep Optimization**: "Your energy peaks at X hours of sleep (Z% confidence)"
 - **Behavioral Patterns**: "Screen time above X hours reduces next-day wellbeing by Y%"
 
-### 3.6 User Interface System
+### 3.6 Interactive Raw Data Explorer
 
 #### 3.6.1 Description
-Streamlit-based web interface with responsive design and interactive controls.
+Comprehensive data exploration interface with filtering, analysis, and export capabilities.
 
 #### 3.6.2 Functional Requirements
-- **REQ-3.6.1**: System SHALL provide sidebar configuration panel
-- **REQ-3.6.2**: System SHALL support data source selection (JSON/Google Sheets)
-- **REQ-3.6.3**: System SHALL implement date range filtering
-- **REQ-3.6.4**: System SHALL provide manual data refresh functionality
-- **REQ-3.6.5**: System SHALL organize content in tabbed interface
-- **REQ-3.6.6**: System SHALL display appropriate loading states and error messages
+- **REQ-3.6.1**: System SHALL provide interactive date range filtering with calendar widget
+- **REQ-3.6.2**: System SHALL allow selective column display with multiselect interface
+- **REQ-3.6.3**: System SHALL implement data quality filters (Complete Sleep Data, Complete Mood/Energy, Records with Notes)
+- **REQ-3.6.4**: System SHALL display filtered data in sortable, paginated table format
+- **REQ-3.6.5**: System SHALL show real-time summary statistics (record count, date span, completeness)
+- **REQ-3.6.6**: System SHALL provide column-by-column statistics (completeness, means, unique values)
+- **REQ-3.6.7**: System SHALL enable CSV export of filtered data with timestamp-based filenames
+- **REQ-3.6.8**: System SHALL be accessible via expandable "📋 Interactive Raw Data Explorer" section
+
+### 3.7 Enhanced User Interface System
+
+#### 3.7.1 Description
+Streamlit-based web interface with responsive design, robust error handling, and user-friendly controls.
+
+#### 3.7.2 Functional Requirements
+- **REQ-3.7.1**: System SHALL provide comprehensive sidebar configuration panel with organized sections
+- **REQ-3.7.2**: System SHALL support synthetic data mode for testing and demonstration
+- **REQ-3.7.3**: System SHALL implement configurable display options (KPI layout, statistical details)
+- **REQ-3.7.4**: System SHALL provide manual data refresh functionality with cache clearing
+- **REQ-3.7.5**: System SHALL organize analysis content in tabbed interfaces (Trends, Correlations, Distributions)
+- **REQ-3.7.6**: System SHALL display appropriate loading states, error messages, and data source indicators
+- **REQ-3.7.7**: System SHALL include drill-down analysis tabs (Sleep Analysis, Activity Impact, Pattern Analysis)
 
 #### 3.6.3 Interface Layout
 ```
@@ -293,18 +331,37 @@ requests >= 2.31.0       # HTTP library for external data
 watchdog >= 3.0.0        # File system monitoring (dev)
 ```
 
-### 5.3 File Structure
+### 5.3 Current File Structure (Post-Cleanup)
 ```
 visualization/
-├── dashboard.py                 # Main Streamlit application
-├── generate_sample_data.py      # Sample data generator
-├── run_dashboard.py            # Convenience launcher
-├── README_DASHBOARD.md         # Setup and deployment guide
-├── activity_analysis.py        # Standalone activity analyzer
-├── health_dashboard.py         # Standalone health visualizer
-├── sleep_analysis.py           # Standalone sleep analyzer
-└── download_data.py            # Data fetching utility
+├── dashboard.py                     # Main bulletproof Streamlit dashboard
+├── launch_dashboard.py              # Dashboard launcher script
+├── robust_data_loader.py            # Data loading with fallback system
+├── analytics/                       # Analytics modules
+│   ├── __init__.py                  # Analytics module exports
+│   ├── kpi_calculator.py            # KPI calculations and analysis
+│   ├── sleep_quality_calculator.py  # Objective sleep quality analysis
+│   └── statistical_utils.py        # Statistical functions and testing
+├── components/                      # Reusable UI components
+│   ├── __init__.py                  # Component exports
+│   ├── data_viz.py                  # Interactive charts and visualizations
+│   ├── drill_down_views.py          # Detailed analysis views
+│   ├── insight_display.py           # Statistical insights display
+│   └── kpi_cards.py                 # KPI display cards with explanations
+├── tests/                           # Comprehensive test suite
+│   ├── __init__.py
+│   ├── test_kpi_calculator.py       # KPI calculation tests
+│   ├── test_statistical_utils.py    # Statistical function tests
+│   └── test_ui_components.py        # UI component tests
+├── DATA_LOADING_ANALYSIS.md         # Technical documentation
+└── README.md                        # Setup and usage guide
 ```
+
+**Removed in Cleanup:**
+- 9 PNG files (~2.8MB of old static visualizations)
+- `.venv/` directory (virtual environment)
+- `data/` directories (empty)
+- `analytics/insight_engine.py` (unused placeholder module)
 
 ### 5.4 Configuration Requirements
 ```toml
@@ -387,17 +444,24 @@ tab_name = "MetaLog"
 ### 8.1 Development Environment
 ```bash
 # Installation steps
-uv sync                                    # Install dependencies
-uv run python visualization/generate_sample_data.py  # Generate test data
-uv run python run_dashboard.py           # Launch dashboard
+uv sync                                         # Install dependencies
+
+# Launch dashboard (recommended)
+uv run streamlit run visualization/dashboard.py --server.port 8509
+
+# Alternative launcher
+python visualization/launch_dashboard.py
+
+# Run test suite
+uv run pytest visualization/tests/ -v
 ```
 
 ### 8.2 Production Deployment Options
 
 #### 8.2.1 Local Network Deployment
 ```bash
-uv run streamlit run visualization/dashboard.py --server.address 0.0.0.0
-# Accessible at http://YOUR_IP:8501 on local network
+uv run streamlit run visualization/dashboard.py --server.address 0.0.0.0 --server.port 8509
+# Accessible at http://YOUR_IP:8509 on local network
 ```
 
 #### 8.2.2 Cloud Deployment (Streamlit Cloud)
