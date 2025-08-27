@@ -86,44 +86,36 @@ st.markdown("""
 def main():
     """Main dashboard application with bulletproof data loading"""
     
-    # Header
-    st.markdown('<h1 class="main-header">🛡️ San-Xing Bulletproof Dashboard</h1>', unsafe_allow_html=True)
-    st.markdown("### Reliable wellbeing analytics with robust data handling")
+    # Enhanced Header (Phase 1: Clean and Focused)
+    st.markdown('<h1 class="main-header">📊 San-Xing Personal Analytics</h1>', unsafe_allow_html=True)
+    st.markdown("**Your wellbeing insights at a glance**")
     
-    # Sidebar configuration
+    # Minimal Sidebar (Phase 1: Simplified Configuration)
     with st.sidebar:
-        st.markdown("## 🔧 Dashboard Configuration")
+        st.markdown("## ⚙️ Settings")
         
-        # Data loading options
-        st.markdown("### 📊 Data Source")
-        force_fallback = st.checkbox("Force Synthetic Data (for testing)")
+        # Essential data source control
+        force_fallback = st.checkbox("📊 Use Demo Data", False, 
+                                   help="Toggle to use synthetic demo data instead of real Google Sheets")
         
-        if not force_fallback:
-            st.info("Will attempt to load real Google Sheets data first")
-        else:
-            st.warning("Using synthetic data only")
-        
-        st.divider()
-        
-        # Display options
-        st.markdown("### 🎨 Display Options")
-        kpi_layout = st.selectbox("KPI Layout", ["columns", "rows", "grid"], index=0)
-        show_raw_data = st.checkbox("Show Raw Data Preview", False)
-        show_statistical_details = st.checkbox("Show Statistical Methodology", False)
-        
-        st.divider()
-        
-        # Analysis options
-        st.markdown("### 📈 Analysis Options")
-        correlation_alpha = st.slider("Significance Level (α)", 0.01, 0.10, 0.05, 0.01)
-        show_only_significant = st.checkbox("Highlight Only Significant Correlations", False)
-        
-        st.divider()
-        
-        # Data refresh
-        if st.button("🔄 Reload Data"):
+        # Quick data refresh
+        if st.button("🔄 Refresh Data", help="Reload data from source"):
             st.cache_data.clear()
             st.rerun()
+        
+        st.divider()
+        
+        # Advanced settings (collapsed by default)
+        with st.expander("🔧 Advanced Options", expanded=False):
+            st.markdown("#### Display Settings")
+            kpi_layout = st.selectbox("KPI Layout", ["columns", "rows", "grid"], index=0)
+            show_raw_data = st.checkbox("Show Raw Data Explorer", False)
+            show_statistical_details = st.checkbox("Show Statistical Details", False)
+            
+            st.markdown("#### Analysis Settings")
+            correlation_alpha = st.slider("Significance Level", 0.01, 0.10, 0.05, 0.01,
+                                         help="Statistical significance threshold for correlations")
+            show_only_significant = st.checkbox("Only Significant Correlations", False)
     
     # === DATA LOADING WITH ROBUST FALLBACK ===
     
@@ -217,158 +209,6 @@ def main():
         else:
             st.metric("Completeness", "N/A")
     
-    # Show raw data preview with filtering if requested
-    if show_raw_data:
-        with st.expander("📋 Interactive Raw Data Explorer", expanded=False):
-            st.markdown("### 🔍 Filter & Explore Your Data")
-            
-            # Create filter controls
-            filter_col1, filter_col2, filter_col3 = st.columns(3)
-            
-            with filter_col1:
-                # Date range filter
-                if 'date' in kpi_data.columns and not kpi_data['date'].isna().all():
-                    min_date = kpi_data['date'].min()
-                    max_date = kpi_data['date'].max()
-                    
-                    date_range = st.date_input(
-                        "📅 Date Range",
-                        value=(min_date, max_date),
-                        min_value=min_date,
-                        max_value=max_date
-                    )
-                    
-                    # Apply date filter
-                    if isinstance(date_range, tuple) and len(date_range) == 2:
-                        start_date, end_date = date_range
-                        filtered_data = kpi_data[
-                            (kpi_data['date'] >= pd.Timestamp(start_date)) & 
-                            (kpi_data['date'] <= pd.Timestamp(end_date))
-                        ].copy()
-                    else:
-                        filtered_data = kpi_data.copy()
-                else:
-                    st.info("No date column available for filtering")
-                    filtered_data = kpi_data.copy()
-            
-            with filter_col2:
-                # Column selection
-                available_cols = list(kpi_data.columns)
-                key_cols = ['date', 'mood', 'energy', 'sleep_quality', 'sleep_bedtime', 'wake_time', 'sleep_duration_hours']
-                default_cols = [col for col in key_cols if col in available_cols]
-                
-                selected_columns = st.multiselect(
-                    "📊 Columns to Display",
-                    options=available_cols,
-                    default=default_cols if default_cols else available_cols[:8],
-                    help="Choose which columns to display in the data table"
-                )
-            
-            with filter_col3:
-                # Data quality filter
-                quality_filter = st.selectbox(
-                    "🎯 Data Quality Filter",
-                    options=["All Records", "Complete Sleep Data", "Complete Mood/Energy", "Records with Notes"],
-                    help="Filter records based on data completeness"
-                )
-            
-            # Apply quality filter
-            if quality_filter == "Complete Sleep Data":
-                sleep_cols = ['sleep_bedtime', 'wake_time']
-                available_sleep_cols = [col for col in sleep_cols if col in filtered_data.columns]
-                if available_sleep_cols:
-                    filtered_data = filtered_data.dropna(subset=available_sleep_cols)
-                    
-            elif quality_filter == "Complete Mood/Energy":
-                mood_energy_cols = ['mood', 'energy']
-                available_me_cols = [col for col in mood_energy_cols if col in filtered_data.columns]
-                if available_me_cols:
-                    filtered_data = filtered_data.dropna(subset=available_me_cols)
-                    
-            elif quality_filter == "Records with Notes":
-                note_cols = ['diary_text', 'notes', 'reflection']
-                available_note_cols = [col for col in note_cols if col in filtered_data.columns]
-                if available_note_cols:
-                    filtered_data = filtered_data.dropna(subset=available_note_cols)
-            
-            # Display filtered data
-            if selected_columns and not filtered_data.empty:
-                display_cols = [col for col in selected_columns if col in filtered_data.columns]
-                display_data = filtered_data[display_cols].copy()
-                
-                # Sort by date if available
-                if 'date' in display_data.columns:
-                    display_data = display_data.sort_values('date', ascending=False)
-                
-                st.markdown(f"### 📋 Filtered Data ({len(display_data)} records)")
-                st.dataframe(
-                    display_data,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=400
-                )
-                
-                # Summary stats
-                summary_col1, summary_col2, summary_col3 = st.columns(3)
-                
-                with summary_col1:
-                    st.metric("📊 Records Shown", len(display_data))
-                    
-                with summary_col2:
-                    if 'date' in display_data.columns and len(display_data) > 0:
-                        date_span = (display_data['date'].max() - display_data['date'].min()).days + 1
-                        st.metric("📅 Date Span", f"{date_span} days")
-                    else:
-                        st.metric("📅 Date Span", "N/A")
-                
-                with summary_col3:
-                    completeness = (1 - display_data.isnull().sum().sum() / (len(display_data) * len(display_data.columns))) * 100
-                    st.metric("✅ Completeness", f"{completeness:.0f}%")
-                
-                # Column statistics
-                st.markdown("### 📈 Column Statistics")
-                stats_data = []
-                for col in display_cols:
-                    col_data = display_data[col]
-                    non_null_count = col_data.count()
-                    
-                    if pd.api.types.is_numeric_dtype(col_data):
-                        mean_val = col_data.mean() if non_null_count > 0 else None
-                        stats_data.append({
-                            'Column': col,
-                            'Non-null Count': f"{non_null_count}/{len(display_data)}",
-                            'Completeness': f"{non_null_count/len(display_data)*100:.0f}%",
-                            'Type': 'Numeric',
-                            'Mean': f"{mean_val:.2f}" if mean_val is not None else "N/A"
-                        })
-                    else:
-                        unique_count = col_data.nunique()
-                        stats_data.append({
-                            'Column': col,
-                            'Non-null Count': f"{non_null_count}/{len(display_data)}",
-                            'Completeness': f"{non_null_count/len(display_data)*100:.0f}%",
-                            'Type': 'Text/Categorical',
-                            'Unique Values': unique_count
-                        })
-                
-                st.dataframe(pd.DataFrame(stats_data), hide_index=True, use_container_width=True)
-                
-            else:
-                st.warning("⚠️ No data to display with current filters")
-            
-            # Raw data export option
-            st.markdown("### 💾 Export Options")
-            if st.button("📥 Download Filtered Data as CSV"):
-                if not filtered_data.empty and selected_columns:
-                    export_data = filtered_data[display_cols]
-                    csv = export_data.to_csv(index=False)
-                    st.download_button(
-                        label="📥 Download CSV",
-                        data=csv,
-                        file_name=f"san_xing_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
-                    )
-    
     # === ANALYTICS PROCESSING ===
     
     with st.spinner("Calculating KPIs and statistical analysis..."):
@@ -392,154 +232,23 @@ def main():
             kpis = {}
             correlations = {'significant_correlations': [], 'all_correlations': {}, 'total_tests': 0}
     
-    st.success(f"✅ Analytics completed: {len(kpis)} KPIs calculated")
+    # === PHASE 1: PROGRESSIVE DISCLOSURE ARCHITECTURE ===
     
-    # === MAIN DASHBOARD SECTIONS ===
-    
-    # 1. KPI Overview
+    # 1. PRIMARY SECTION: At-a-Glance KPIs (Above Fold)
     if kpis:
-        st.markdown("## 📊 Key Performance Indicators")
-        render_kpi_overview(kpis, layout=kpi_layout)
-        st.divider()
+        from components.kpi_grid import render_kpi_overview_enhanced
+        render_kpi_overview_enhanced(kpis)
     
-    # 2. Statistical Insights
+    # 2. PRIMARY SECTION: Top Insights (Above Fold) 
     numeric_cols = kpi_data.select_dtypes(include=[np.number]) if kpi_data is not None else pd.DataFrame()
-    if len(numeric_cols.columns) > 1:
-        render_statistical_insights(
-            correlations, 
-            show_methodology=show_statistical_details
-        )
+    if len(numeric_cols.columns) > 1 or kpis:
+        from components.kpi_grid import render_top_insights
+        render_top_insights(correlations, kpis, len(kpi_data) if kpi_data is not None else 0)
         st.divider()
     
-    # 3. Interactive Visualizations
-    st.markdown("## 📈 Interactive Visualizations")
-    
-    viz_tab1, viz_tab2, viz_tab3 = st.tabs(["Trends", "Correlations", "Distributions"])
-    
-    with viz_tab1:
-        # Trend analysis
-        trend_cols = ['mood', 'energy', 'sleep_quality']
-        available_cols = [col for col in trend_cols if col in kpi_data.columns and not kpi_data[col].isna().all()]
-        
-        if available_cols:
-            try:
-                trend_chart = create_trend_chart(
-                    data=kpi_data,
-                    value_columns=available_cols,
-                    date_column='date',
-                    title=f"Wellbeing Metrics Over Time ({data_source_type.title()} Data)",
-                    show_trend_lines=True
-                )
-                st.plotly_chart(trend_chart, use_container_width=True)
-            except Exception as e:
-                st.error(f"Trend chart failed: {e}")
-        else:
-            st.info("No trend data available for visualization")
-        
-        # Individual KPI gauges
-        if kpis:
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                if 'wellbeing_score' in kpis:
-                    try:
-                        gauge_fig = create_kpi_gauge(
-                            value=kpis['wellbeing_score']['score'],
-                            max_value=10,
-                            title="Wellbeing Score",
-                            color_scheme="blue"
-                        )
-                        st.plotly_chart(gauge_fig, use_container_width=True)
-                    except Exception as e:
-                        st.error(f"Wellbeing gauge failed: {e}")
-            
-            with col2:
-                if 'balance_index' in kpis:
-                    try:
-                        gauge_fig = create_kpi_gauge(
-                            value=kpis['balance_index']['index'],
-                            max_value=100,
-                            title="Balance Index (%)",
-                            color_scheme="green"
-                        )
-                        st.plotly_chart(gauge_fig, use_container_width=True)
-                    except Exception as e:
-                        st.error(f"Balance gauge failed: {e}")
-            
-            with col3:
-                if 'trend_indicator' in kpis:
-                    try:
-                        confidence_map = {'high': 0.9, 'medium': 0.6, 'low': 0.3}
-                        confidence_val = confidence_map.get(kpis['trend_indicator']['confidence'], 0.3)
-                        
-                        gauge_fig = create_kpi_gauge(
-                            value=confidence_val,
-                            max_value=1.0,
-                            title="Trend Confidence",
-                            color_scheme="purple"
-                        )
-                        st.plotly_chart(gauge_fig, use_container_width=True)
-                    except Exception as e:
-                        st.error(f"Trend gauge failed: {e}")
-    
-    with viz_tab2:
-        # Correlation analysis
-        if len(numeric_cols.columns) > 1:
-            try:
-                from components.insight_display import render_correlation_matrix
-                render_correlation_matrix(
-                    data=numeric_cols,
-                    correlation_results=correlations,
-                    show_only_significant=show_only_significant
-                )
-            except Exception as e:
-                st.error(f"Correlation matrix failed: {e}")
-        else:
-            st.info("Need at least 2 numeric variables for correlation analysis")
-    
-    with viz_tab3:
-        # Distribution analysis
-        try:
-            dist_type = st.selectbox("Distribution View", ["box", "violin", "histogram"])
-            wellbeing_cols = ['mood', 'energy', 'sleep_quality', 'sleep_duration']
-            available_dist_cols = [col for col in wellbeing_cols if col in kpi_data.columns and not kpi_data[col].isna().all()]
-            
-            if available_dist_cols:
-                dist_chart = create_statistical_summary_chart(
-                    data=kpi_data,
-                    columns=available_dist_cols,
-                    chart_type=dist_type
-                )
-                st.plotly_chart(dist_chart, use_container_width=True)
-            else:
-                st.info("No numeric data available for distribution analysis")
-        except Exception as e:
-            st.error(f"Distribution analysis failed: {e}")
-    
-    st.divider()
-    
-    # 4. Drill-down Analysis (with error handling)
-    st.markdown("## 🔍 Detailed Analysis")
-    
-    analysis_tab1, analysis_tab2, analysis_tab3 = st.tabs(["Sleep Analysis", "Activity Impact", "Pattern Analysis"])
-    
-    with analysis_tab1:
-        try:
-            render_sleep_analysis_drilldown(kpi_data, kpis)
-        except Exception as e:
-            st.error(f"Sleep analysis failed: {e}")
-    
-    with analysis_tab2:
-        try:
-            render_activity_impact_drilldown(kpi_data, kpis)
-        except Exception as e:
-            st.error(f"Activity analysis failed: {e}")
-    
-    with analysis_tab3:
-        try:
-            render_pattern_analysis_drilldown(kpi_data, correlations, kpis)
-        except Exception as e:
-            st.error(f"Pattern analysis failed: {e}")
+    # 3. SECONDARY SECTION: Progressive Disclosure (On Demand)
+    from components.kpi_grid import render_progressive_disclosure_sections
+    render_progressive_disclosure_sections(kpi_data, kpis, correlations)
     
     st.divider()
     
