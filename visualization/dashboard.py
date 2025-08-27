@@ -123,7 +123,7 @@ def main():
         # Data refresh
         if st.button("🔄 Reload Data"):
             st.cache_data.clear()
-            st.experimental_rerun()
+            st.rerun()
     
     # === DATA LOADING WITH ROBUST FALLBACK ===
     
