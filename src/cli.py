@@ -341,7 +341,7 @@ def main():
                     logger.warning("No data to process for visualization")
             except ImportError as ie:  # pragma: no cover
                 logger.error("pandas not available for data processing (%s)", ie)
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError, KeyError) as e:
                 logger.error("Data processing failed: %s", str(e))
 
         # Optional: export HuggingFace dataset (dedup by entry_id)
@@ -370,8 +370,8 @@ def main():
                     from .hf_export import upload_to_hf_hub
                     # Upload processed entries (filtered by days)
                     repo_url = upload_to_hf_hub(
-                        entries, 
-                        args.upload_hf, 
+                        entries,
+                        args.upload_hf,
                         hf_token=config.HF_TOKEN,
                         private=not args.hf_public,
                     )
