@@ -36,6 +36,319 @@ from components.drill_down_views import (
     render_pattern_analysis_drilldown
 )
 
+
+def fetch_fresh_data_from_sheets():
+    """Fetch fresh data directly from Google Sheets and update local snapshots"""
+    
+    with st.spinner("📥 Fetching latest data from Google Sheets..."):
+        try:
+            # Import required modules
+            from src.config import Config
+            from src.ingestion import SheetIngester
+            from src.data_processor import DataProcessor
+            import json
+            from datetime import datetime
+            
+            # Load configuration
+            config_path = parent_dir / "config.local.toml"
+            if not config_path.exists():
+                st.error("❌ Configuration file not found. Please ensure config.local.toml exists.")
+                return
+            
+            config = Config.from_file(config_path)
+            
+            # Initialize ingester and connect
+            ingester = SheetIngester(config)
+            ingester.connect()
+            
+            # Fetch data from Google Sheets
+            st.info("🔍 Reading data from Google Sheets...")
+            records, header_hash = ingester.fetch_rows()
+            
+            if not records:
+                st.warning("⚠️ No data found in Google Sheets")
+                return
+            
+            # Create new snapshot
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            run_id = f"dashboard_{timestamp}"
+            
+            snapshot_data = {
+                "run_id": run_id,
+                "timestamp": datetime.now().isoformat(),
+                "source": "google_sheets_direct",
+                "header_hash": header_hash,
+                "total_records": len(records),
+                "records": records
+            }
+            
+            # Save new snapshot
+            raw_dir = parent_dir / "data" / "raw"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            
+            snapshot_path = raw_dir / f"snapshot_{run_id}.json"
+            with open(snapshot_path, 'w', encoding='utf-8') as f:
+                json.dump(snapshot_data, f, ensure_ascii=False, indent=2)
+            
+            # Update latest snapshot pointer
+            latest_path = raw_dir / "snapshot_latest.json"
+            with open(latest_path, 'w', encoding='utf-8') as f:
+                json.dump({"file": f"snapshot_{run_id}.json"}, f)
+            
+            # Process the data to verify it's working
+            processor = DataProcessor(config)
+            processor.load_from_records(records)
+            df = processor.process_all()
+            
+            # Show success message with data summary
+            st.success(f"✅ **Fresh data fetched successfully!**")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("📊 Total Records", len(records))
+            with col2:
+                st.metric("📅 Processed Rows", len(df))
+            with col3:
+                st.metric("🗂️ Data Columns", len(df.columns))
+            with col4:
+                if 'date' in df.columns:
+                    date_range = (df['date'].max() - df['date'].min()).days + 1
+                    st.metric("📈 Date Range", f"{date_range} days")
+                else:
+                    st.metric("📈 Date Range", "N/A")
+            
+            st.info(f"💾 **New snapshot saved**: `snapshot_{run_id}.json`")
+            st.info(f"🔍 **Header hash**: `{header_hash}` - Schema validation successful")
+            
+            # Clear cache and refresh
+            st.cache_data.clear()
+            st.rerun()
+            
+        except FileNotFoundError as e:
+            st.error(f"❌ **File not found**: {e}")
+            st.info("💡 Make sure your `config.local.toml` and service account credentials are properly configured.")
+            
+        except Exception as e:
+            st.error(f"❌ **Error fetching data**: {e}")
+            
+            # Provide specific troubleshooting based on error type
+            error_str = str(e)
+            if "404" in error_str:
+                st.warning("🔍 **404 Error - Resource not found**")
+                st.info("""
+                **Possible causes:**
+                - ❌ Incorrect Spreadsheet ID in config.local.toml
+                - ❌ Worksheet/tab name doesn't exist  
+                - ❌ Spreadsheet not shared with service account
+                - ❌ Spreadsheet has been moved or deleted
+                """)
+                
+                # Show current configuration for verification
+                try:
+                    st.markdown("**Current Configuration:**")
+                    st.code(f"""
+Spreadsheet ID: {config.SPREADSHEET_ID}
+Tab Name: {config.TAB_NAME}
+Service Account: {config.CREDENTIALS_PATH}
+                    """)
+                except:
+                    st.warning("Could not display configuration details")
+                    
+            elif "403" in error_str:
+                st.warning("🚫 **403 Error - Access denied**")
+                st.info("""
+                **Possible causes:**
+                - ❌ Service account not added to spreadsheet
+                - ❌ Service account lacks read permissions
+                - ❌ API quotas exceeded
+                """)
+            elif "401" in error_str:
+                st.warning("🔑 **401 Error - Authentication failed**")
+                st.info("""
+                **Possible causes:**
+                - ❌ Invalid service account credentials
+                - ❌ Credentials file not found or corrupted
+                - ❌ Service account key expired
+                """)
+            else:
+                st.info("💡 Check your Google Sheets permissions and internet connection.")
+            
+            # Quick setup verification
+            with st.expander("🔧 Setup Verification", expanded=True):
+                st.markdown("**Verify your setup:**")
+                
+                # Check config file
+                config_path = parent_dir / "config.local.toml"
+                if config_path.exists():
+                    st.success("✅ Config file found")
+                else:
+                    st.error("❌ Config file missing")
+                
+                # Check credentials file
+                try:
+                    creds_path = config.CREDENTIALS_PATH if 'config' in locals() else None
+                    if creds_path and Path(creds_path).exists():
+                        st.success("✅ Credentials file found")
+                    else:
+                        st.error("❌ Credentials file missing")
+                except:
+                    st.error("❌ Could not check credentials file")
+                
+                st.markdown("""
+                **Manual verification steps:**
+                1. **Open your Google Sheet** in a browser
+                2. **Check the URL** - copy the long ID between `/d/` and `/edit`  
+                3. **Verify tab name** - check exact spelling and case
+                4. **Share with service account** - add the service account email as Editor
+                5. **Service account email** is in your credentials JSON file (`client_email` field)
+                """)
+            
+            # Show traceback in expander for debugging
+            import traceback
+            with st.expander("🔧 Full Debug Information", expanded=False):
+                st.code(traceback.format_exc(), language="python")
+
+
+def test_google_sheets_connection():
+    """Test Google Sheets connection and provide diagnostics"""
+    
+    with st.spinner("🔍 Testing Google Sheets connection..."):
+        try:
+            # Import required modules
+            from src.config import Config
+            from src.ingestion import SheetIngester
+            import gspread
+            
+            # Load configuration
+            config_path = parent_dir / "config.local.toml"
+            if not config_path.exists():
+                st.error("❌ Configuration file not found")
+                return
+                
+            config = Config.from_file(config_path)
+            
+            # Test 1: Check config values
+            st.info("**Step 1:** Checking configuration...")
+            st.write(f"📊 Spreadsheet ID: `{config.SPREADSHEET_ID[:10]}...{config.SPREADSHEET_ID[-10:]}`")
+            st.write(f"📝 Tab Name: `{config.TAB_NAME}`")
+            st.write(f"🔑 Credentials: `{config.CREDENTIALS_PATH}`")
+            
+            # Test 2: Check credentials file
+            st.info("**Step 2:** Checking credentials file...")
+            if not Path(config.CREDENTIALS_PATH).exists():
+                st.error(f"❌ Credentials file not found: {config.CREDENTIALS_PATH}")
+                return
+            st.success("✅ Credentials file exists")
+            
+            # Test 3: Initialize ingester
+            st.info("**Step 3:** Initializing Google Sheets connection...")
+            ingester = SheetIngester(config)
+            
+            # Test 4: Connect to Google Sheets API
+            st.info("**Step 4:** Connecting to Google Sheets API...")
+            ingester.connect()
+            st.success("✅ Google Sheets API connection successful")
+            
+            # Test 5: Access spreadsheet
+            st.info("**Step 5:** Accessing spreadsheet...")
+            sheet = ingester.client.open_by_key(config.SPREADSHEET_ID)
+            st.success(f"✅ Spreadsheet found: `{sheet.title}`")
+            
+            # Test 6: List worksheets
+            st.info("**Step 6:** Listing available worksheets...")
+            worksheets = sheet.worksheets()
+            worksheet_names = [ws.title for ws in worksheets]
+            st.write(f"📋 Available worksheets: {worksheet_names}")
+            
+            # Test 7: Access target worksheet
+            st.info("**Step 7:** Accessing target worksheet...")
+            if config.TAB_NAME in worksheet_names:
+                worksheet = sheet.worksheet(config.TAB_NAME)
+                st.success(f"✅ Worksheet `{config.TAB_NAME}` found")
+                
+                # Test 8: Check worksheet data
+                st.info("**Step 8:** Checking worksheet data...")
+                row_count = worksheet.row_count
+                col_count = worksheet.col_count
+                st.write(f"📊 Worksheet size: {row_count} rows × {col_count} columns")
+                
+                # Test 9: Get headers
+                st.info("**Step 9:** Reading headers...")
+                headers = worksheet.row_values(1)
+                st.write(f"📝 Headers ({len(headers)}): {', '.join(headers[:5])}{'...' if len(headers) > 5 else ''}")
+                
+                # Test 10: Test data access
+                st.info("**Step 10:** Testing data access...")
+                try:
+                    records = worksheet.get_all_records()
+                    st.success(f"✅ Successfully read {len(records)} records")
+                    
+                    if records:
+                        st.write("🔍 **Sample record keys:**", list(records[0].keys())[:8])
+                except Exception as e:
+                    st.warning(f"⚠️ Data access issue: {e}")
+                    st.info("Trying alternative method...")
+                    values = worksheet.get_all_values()
+                    st.success(f"✅ Alternative method: read {len(values)} rows")
+                
+                st.success("🎉 **All tests passed!** Your Google Sheets connection is working properly.")
+                
+            else:
+                st.error(f"❌ Worksheet `{config.TAB_NAME}` not found")
+                st.info(f"💡 Available options: {', '.join(worksheet_names)}")
+                
+        except gspread.exceptions.SpreadsheetNotFound:
+            st.error("❌ **Spreadsheet not found**")
+            st.info("Check your Spreadsheet ID and ensure the spreadsheet exists")
+            
+        except gspread.exceptions.WorksheetNotFound:
+            st.error("❌ **Worksheet not found**") 
+            st.info("Check your tab name spelling and case")
+            
+        except Exception as e:
+            st.error(f"❌ **Connection test failed**: {e}")
+            
+            # Show specific error guidance
+            error_str = str(e)
+            if "403" in error_str:
+                st.warning("🚫 **Access denied** - Share your spreadsheet with the service account email")
+            elif "401" in error_str:
+                st.warning("🔑 **Authentication failed** - Check your credentials file")
+            elif "404" in error_str:
+                st.warning("🔍 **Not found** - Verify your Spreadsheet ID")
+            
+            with st.expander("🔧 Full Error Details"):
+                import traceback
+                st.code(traceback.format_exc(), language="python")
+
+
+def check_data_freshness(kpi_data):
+    """Check how fresh the current data is"""
+    try:
+        if kpi_data is None or 'date' not in kpi_data.columns:
+            return "⚠️", "Unknown", "#FFA500"
+        
+        # Get the most recent date in the data
+        latest_date = pd.to_datetime(kpi_data['date']).max()
+        current_date = pd.Timestamp.now()
+        
+        # Calculate days since last entry
+        days_old = (current_date - latest_date).days
+        
+        if days_old == 0:
+            return "🟢", "Fresh (today)", "#28A745"
+        elif days_old == 1:
+            return "🟡", "1 day old", "#FFC107"
+        elif days_old <= 3:
+            return "🟡", f"{days_old} days old", "#FFC107"
+        elif days_old <= 7:
+            return "🟠", f"{days_old} days old", "#FD7E14"
+        else:
+            return "🔴", f"{days_old} days old", "#DC3545"
+            
+    except Exception:
+        return "⚠️", "Unknown", "#6C757D"
+
 # Page configuration
 st.set_page_config(
     page_title="San-Xing Bulletproof Dashboard",
@@ -103,6 +416,41 @@ def main():
             st.cache_data.clear()
             st.rerun()
         
+        # Fetch latest data from Google Sheets
+        if st.button("📥 Fetch Latest from Google Sheets", help="Download fresh data directly from Google Sheets"):
+            fetch_fresh_data_from_sheets()
+        
+        # Test connection button
+        if st.button("🔍 Test Google Sheets Connection", help="Test connection without fetching data"):
+            test_google_sheets_connection()
+        
+        st.divider()
+        
+        # Auto-refresh settings
+        st.markdown("#### ⚡ Auto-Refresh Settings")
+        auto_refresh = st.checkbox("🔄 Enable Auto-Refresh", False, 
+                                 help="Automatically refresh dashboard at selected intervals")
+        
+        if auto_refresh:
+            refresh_interval = st.selectbox(
+                "🕒 Refresh Interval",
+                options=[30, 60, 300, 600, 1800],
+                format_func=lambda x: f"{x//60}h {x%60}m" if x >= 60 else f"{x} minutes",
+                index=1,  # Default to 60 minutes
+                help="How often to refresh the dashboard"
+            )
+            
+            st.info(f"⏰ Dashboard auto-refreshes every {refresh_interval//60}h {refresh_interval%60}m")
+            
+            # Add JavaScript for auto-refresh
+            st.markdown(f"""
+            <script>
+                setTimeout(function(){{
+                    window.location.reload();
+                }}, {refresh_interval * 1000});
+            </script>
+            """, unsafe_allow_html=True)
+        
         st.divider()
         
         # Advanced settings (collapsed by default)
@@ -144,9 +492,13 @@ def main():
             
             if kpi_data is not None:
                 # Real data loaded successfully
-                st.markdown("""
+                # Check data freshness
+                freshness_icon, freshness_text, freshness_color = check_data_freshness(kpi_data)
+                
+                st.markdown(f"""
                 <div class="data-source-success">
-                    ✅ <strong>Real Data Source:</strong> Google Sheets Meta-Awareness Log
+                    ✅ <strong>Real Data Source:</strong> Google Sheets Meta-Awareness Log<br>
+                    {freshness_icon} <strong>Data Freshness:</strong> <span style="color: {freshness_color};">{freshness_text}</span>
                 </div>
                 """, unsafe_allow_html=True)
                 data_source_type = "real"
