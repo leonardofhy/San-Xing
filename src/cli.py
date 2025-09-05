@@ -99,19 +99,19 @@ def main():
     parser.add_argument(
         "--upload-raw",
         action="store_true",
-        help="Upload full raw dataset instead of filtered entries (use with --upload-hf)"
+        help="Upload full raw dataset instead of filtered entries (use with --upload-hf)",
     )
     parser.add_argument(
         "--hf-public",
         action="store_true",
-        help="Make repository public when uploading to HF Hub (default: private)"
+        help="Make repository public when uploading to HF Hub (default: private)",
     )
     parser.add_argument(
         "--hf-format",
         dest="hf_format",
         choices=["parquet", "json"],
         default="json",
-        help="Format for HuggingFace dataset export (default: json)"
+        help="Format for HuggingFace dataset export (default: json)",
     )
     parser.add_argument(
         "--process-data",
@@ -127,12 +127,9 @@ def main():
     parser.add_argument(
         "--email-result",
         action="store_true",
-        help="Send analysis results via email (requires email configuration)"
+        help="Send analysis results via email (requires email configuration)",
     )
-    parser.add_argument(
-        "--email-recipient",
-        help="Email recipient address (overrides config file)"
-    )
+    parser.add_argument("--email-recipient", help="Email recipient address (overrides config file)")
 
     args = parser.parse_args()
 
@@ -222,7 +219,7 @@ def main():
     # HuggingFace token (from config file or environment)
     hf_token = cfg_get("hf_token")
     snapshot_dedup_cfg = cfg_get("snapshot_dedup", "SNAPSHOT_DEDUP", default=True)
-    
+
     # Email configuration
     email_enabled = args.email_result or bool(cfg_get("email_enabled", default=False))
     email_recipient = args.email_recipient or cfg_get("email_recipient")
@@ -282,20 +279,20 @@ def main():
         pass
     if getattr(args, "no_snapshot_dedup", False):
         config.SNAPSHOT_DEDUP = False
-    
+
     # Email configuration
     config.EMAIL_ENABLED = email_enabled
     if email_recipient:
         config.EMAIL_RECIPIENT = email_recipient
-    
+
     # Load all email settings from config file
     email_smtp_server = cfg_get("email_smtp_server")
-    email_smtp_port = cfg_get("email_smtp_port")  
+    email_smtp_port = cfg_get("email_smtp_port")
     email_sender = cfg_get("email_sender")
     email_password = cfg_get("email_password")
     email_sender_name = cfg_get("email_sender_name")
     email_max_retries = cfg_get("email_max_retries")
-    
+
     if email_smtp_server:
         config.EMAIL_SMTP_SERVER = email_smtp_server
     if email_smtp_port:
@@ -312,7 +309,7 @@ def main():
         config.EMAIL_SENDER_NAME = email_sender_name
     if email_max_retries:
         config.EMAIL_MAX_RETRIES = int(email_max_retries)
-    
+
     # Recreate dirs if custom output-dir changed
     config.RAW_DIR.mkdir(parents=True, exist_ok=True)
     config.INSIGHTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -359,7 +356,7 @@ def main():
 
         # Step 3: Filter by date range
         if days and not force_all:
-            cutoff_date = datetime.now().date() - timedelta(days=int(days) - 1)
+            cutoff_date = datetime.now().date() - timedelta(days=int(days))
             entries = [e for e in entries if e.logical_date >= cutoff_date]
             logger.info("Filtered to %d entries from last %s days", len(entries), days)
 
@@ -369,19 +366,21 @@ def main():
                 processor = DataProcessor(config)
                 processor.load_from_records(records)
                 df = processor.process_all()
-                
+
                 if not df.empty:
                     base_path = Path(args.process_data)
                     csv_path = Path(f"{base_path}.csv")
                     json_path = Path(f"{base_path}-analysis.json")
-                    
+
                     processor.export_csv(csv_path)
                     processor.export_analysis_ready(json_path)
-                    
+
                     stats = processor.get_summary_stats()
-                    logger.info("Data processing completed. Summary: %d entries, mood avg: %.1f", 
-                               stats.get('total_entries', 0),
-                               stats.get('mood_stats', {}).get('mean', 0) or 0)
+                    logger.info(
+                        "Data processing completed. Summary: %d entries, mood avg: %.1f",
+                        stats.get("total_entries", 0),
+                        stats.get("mood_stats", {}).get("mean", 0) or 0,
+                    )
                 else:
                     logger.warning("No data to process for visualization")
             except ImportError as ie:  # pragma: no cover
@@ -397,22 +396,24 @@ def main():
                 logger.error("datasets library not installed; add 'datasets' dependency (%s)", ie)
                 sys.exit(1)
             export_hf_dataset(entries, Path(args.export_hf), format=args.hf_format)
-            
+
         # Optional: upload to HuggingFace Hub
         if args.upload_hf:
             try:
                 if args.upload_raw:
                     from .hf_export import upload_raw_data_to_hf_hub
+
                     # Upload full raw dataset (unfiltered)
                     repo_url = upload_raw_data_to_hf_hub(
                         records,  # Use all raw records
-                        args.upload_hf, 
+                        args.upload_hf,
                         hf_token=config.HF_TOKEN,
                         private=not args.hf_public,
                     )
                     logger.info("Successfully uploaded raw data to: %s", repo_url)
                 else:
                     from .hf_export import upload_to_hf_hub
+
                     # Upload processed entries (filtered by days)
                     repo_url = upload_to_hf_hub(
                         entries,
@@ -449,9 +450,12 @@ def main():
         output_path = persister.persist(insight_pack, run_id)
 
         # Step 7: Email results (optional)
-        logger.debug("Email configuration - EMAIL_ENABLED: %s, email_enabled flag: %s", 
-                    getattr(config, 'EMAIL_ENABLED', 'NOT_SET'), email_enabled)
-        
+        logger.debug(
+            "Email configuration - EMAIL_ENABLED: %s, email_enabled flag: %s",
+            getattr(config, "EMAIL_ENABLED", "NOT_SET"),
+            email_enabled,
+        )
+
         if config.EMAIL_ENABLED:
             try:
                 logger.info("Attempting to send email notification")
@@ -465,7 +469,9 @@ def main():
                 logger.error("Email service error: %s", str(e))
                 # Don't fail the entire process due to email issues
         else:
-            logger.info("Email disabled - EMAIL_ENABLED: %s", getattr(config, 'EMAIL_ENABLED', 'NOT_SET'))
+            logger.info(
+                "Email disabled - EMAIL_ENABLED: %s", getattr(config, "EMAIL_ENABLED", "NOT_SET")
+            )
 
         # Determine exit code
         if insight_pack.meta.get("mode") == "fallback":
