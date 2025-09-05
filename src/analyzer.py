@@ -16,6 +16,39 @@ logger = get_logger(__name__)
 class LLMAnalyzer:
     """Handles LLM prompt building and API calls"""
 
+    # System prompt for the LLM
+    SYSTEM_PROMPT = (
+        "你是一位精準且具結構化思維的個人成長教練。"
+        "所有回覆必須是有效 JSON（UTF-8），不得含有額外文字。"
+    )
+
+    # Main analysis prompt template
+    ANALYSIS_PROMPT_TEMPLATE = """你是一位精準、沉著且具同理心的個人成長教練，正在分析多日的日誌內容。
+請「只輸出」一個有效 JSON，不要加入解釋、前後綴或 Markdown。使用下列固定英文字鍵 (維持英文，不可翻譯)：
+- dailySummaries: 陣列，元素格式 {{date, summary}}，summary 為該日期的精煉重點 (不超過 60 中文字)。
+- themes: 陣列，元素格式 {{label, support}}，最多 5 個；label 需 ≤12 個全形字，代表跨日出現的核心主題；support 為整數 (出現/支持度)。
+- reflectiveQuestion: 一個引導式、開放式反思問題（避免是/否回答，聚焦模式 / 習慣 / 意義）。
+- anomalies: （可選）字串陣列，指出不尋常或與過往模式偏離的觀察。
+- hiddenSignals: （可選）字串陣列，指出尚未被使用者明確寫出的潛在趨勢或情緒信號。
+- emotionalIndicators: （可選）字串陣列，聚焦情緒調節、壓力、動機等微妙指標。
+
+分析重點指引：
+1. 抽取可行洞察：聚焦行為模式、能量變化、情緒調節、價值一致性。
+2. 避免空泛語句（如：保持加油、繼續努力）；輸出具體、觀察式描述。
+3. 不捏造未出現的事件；允許指出資料不足處。
+4. 若日誌含凌晨（<03:00）內容，仍視為其邏輯日期 (已預先處理)。
+5. reflectiveQuestion 要能引導下一步探索，而非重述既有狀態。
+
+使用者日誌內容 (原文可能混合語言)：
+{entries_text}
+
+請執行：
+- 先整體掃描 → 建立主題與信號 → 逐日濃縮 → 生成反思問題。
+僅輸出最終 JSON，無任何多餘文字。"""
+
+    # Default fallback question
+    DEFAULT_REFLECTIVE_QUESTION = "請回顧今天的一件小事，它代表了你想成為的人嗎?"
+
     def __init__(self, config: Config):
         self.config = config
 
@@ -49,34 +82,33 @@ class LLMAnalyzer:
         logger.error("All LLM attempts failed, using fallback")
         return InsightPack.create_fallback(run_id, self.config.VERSION, len(entries))
 
+    def _format_entries_text(self, entries: List[DiaryEntry]) -> str:
+        """Format diary entries into a single text block"""
+        return "\n\n".join([f"[{entry.logical_date}]\n{entry.diary_text}" for entry in entries])
+
     def _build_prompt(self, entries: List[DiaryEntry]) -> str:
-        """Build prompt (Traditional Chinese instructions)"""
-        entries_text = "\n\n".join(
-            [f"[{entry.logical_date}]\n{entry.diary_text}" for entry in entries]
-        )
+        """Build analysis prompt using the template and entries"""
+        entries_text = self._format_entries_text(entries)
+        return self.ANALYSIS_PROMPT_TEMPLATE.format(entries_text=entries_text)
 
-        return f"""你是一位精準、沉著且具同理心的個人成長教練，正在分析多日的日誌內容。
-請「只輸出」一個有效 JSON，不要加入解釋、前後綴或 Markdown。使用下列固定英文字鍵 (維持英文，不可翻譯)：
-- dailySummaries: 陣列，元素格式 {{date, summary}}，summary 為該日期的精煉重點 (不超過 60 中文字)。
-- themes: 陣列，元素格式 {{label, support}}，最多 5 個；label 需 ≤12 個全形字，代表跨日出現的核心主題；support 為整數 (出現/支持度)。
-- reflectiveQuestion: 一個引導式、開放式反思問題（避免是/否回答，聚焦模式 / 習慣 / 意義）。
-- anomalies: （可選）字串陣列，指出不尋常或與過往模式偏離的觀察。
-- hiddenSignals: （可選）字串陣列，指出尚未被使用者明確寫出的潛在趨勢或情緒信號。
-- emotionalIndicators: （可選）字串陣列，聚焦情緒調節、壓力、動機等微妙指標。
+    def _create_base_payload(self, prompt: str) -> Dict:
+        """Create the base API payload for LLM requests"""
+        return {
+            "model": self.config.LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.7,
+        }
 
-分析重點指引：
-1. 抽取可行洞察：聚焦行為模式、能量變化、情緒調節、價值一致性。
-2. 避免空泛語句（如：保持加油、繼續努力）；輸出具體、觀察式描述。
-3. 不捏造未出現的事件；允許指出資料不足處。
-4. 若日誌含凌晨（<03:00）內容，仍視為其邏輯日期 (已預先處理)。
-5. reflectiveQuestion 要能引導下一步探索，而非重述既有狀態。
-
-使用者日誌內容 (原文可能混合語言)：
-{entries_text}
-
-請執行：
-- 先整體掃描 → 建立主題與信號 → 逐日濃縮 → 生成反思問題。
-僅輸出最終 JSON，無任何多餘文字。"""
+    def _create_request_headers(self) -> Dict[str, str]:
+        """Create HTTP headers for API requests"""
+        return {
+            "Authorization": f"Bearer {self.config.LLM_API_KEY}",
+            "Content-Type": "application/json",
+        }
 
     def _call_llm(self, prompt: str) -> Dict:
         """Call LLM API. Supports optional streaming if config.LLM_STREAM is True.
