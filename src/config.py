@@ -59,6 +59,18 @@ class Config:
     # HuggingFace integration
     HF_TOKEN: str = os.getenv("HF_TOKEN", "")
 
+    # Email configuration
+    EMAIL_ENABLED: bool = False
+    EMAIL_SMTP_SERVER: str = os.getenv("EMAIL_SMTP_SERVER", "")
+    EMAIL_SMTP_PORT: int = int(os.getenv("EMAIL_SMTP_PORT", "587"))
+    EMAIL_SENDER: str = os.getenv("EMAIL_SENDER", "")
+    EMAIL_PASSWORD: str = os.getenv("EMAIL_PASSWORD", "")
+    EMAIL_RECIPIENT: str = os.getenv("EMAIL_RECIPIENT", "")
+    EMAIL_SENDER_NAME: str = os.getenv("EMAIL_SENDER_NAME", "三省日誌分析")
+    EMAIL_MAX_RETRIES: int = int(os.getenv("EMAIL_MAX_RETRIES", "2"))
+    EMAIL_GMAIL_LABEL: str = os.getenv("EMAIL_GMAIL_LABEL", "Meta-Awareness/Weekly")
+    EMAIL_APPLY_LABEL: bool = True  # Enable Gmail labeling by default
+
     # Output
     OUTPUT_DIR: Path = Path("./data")
     RAW_DIR: Path = field(init=False)
@@ -182,10 +194,13 @@ def _coerce_types(data: Dict[str, Any]) -> Dict[str, Any]:
         "MAX_CHAR_BUDGET",
         "LLM_TIMEOUT",
         "LLM_MAX_RETRIES",
+        "EMAIL_SMTP_PORT",
+        "EMAIL_MAX_RETRIES",
     }
     bool_fields = {"DRY_RUN"}
     bool_fields.update({"LLM_STREAM"})
     bool_fields.update({"SNAPSHOT_DEDUP"})
+    bool_fields.update({"EMAIL_ENABLED"})
     path_fields = {"CREDENTIALS_PATH", "OUTPUT_DIR", "OFFLINE_SNAPSHOT", "credentials_path", "output_dir", "offline_snapshot"}
     for f in int_fields:
         if f in data and isinstance(data[f], str) and data[f].isdigit():
@@ -222,7 +237,16 @@ def _coerce_types(data: Dict[str, Any]) -> Dict[str, Any]:
         "log_format": "LOG_FORMAT",
         "dry_run": "DRY_RUN",
         "output_dir": "OUTPUT_DIR",
-        "snapshot_dedup": "SNAPSHOT_DEDUP"
+        "snapshot_dedup": "SNAPSHOT_DEDUP",
+        # Email field mappings
+        "email_enabled": "EMAIL_ENABLED",
+        "email_smtp_server": "EMAIL_SMTP_SERVER",
+        "email_smtp_port": "EMAIL_SMTP_PORT",
+        "email_sender": "EMAIL_SENDER",
+        "email_password": "EMAIL_PASSWORD",
+        "email_recipient": "EMAIL_RECIPIENT",
+        "email_sender_name": "EMAIL_SENDER_NAME",
+        "email_max_retries": "EMAIL_MAX_RETRIES"
     }
     
     # Apply field mappings

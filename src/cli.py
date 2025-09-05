@@ -31,6 +31,7 @@ except (ModuleNotFoundError, ImportError):  # Fallback to tomli if installed
 from .analyzer import LLMAnalyzer
 from .config import Config
 from .data_processor import DataProcessor
+from .email_service import EmailService
 from .ingestion import SheetIngester
 from .logger import get_logger
 from .normalizer import EntryNormalizer
@@ -123,6 +124,15 @@ def main():
             "Optional PATH prefix (default: data/processed)."
         ),
     )
+    parser.add_argument(
+        "--email-result",
+        action="store_true",
+        help="Send analysis results via email (requires email configuration)"
+    )
+    parser.add_argument(
+        "--email-recipient",
+        help="Email recipient address (overrides config file)"
+    )
 
     args = parser.parse_args()
 
@@ -212,6 +222,10 @@ def main():
     # HuggingFace token (from config file or environment)
     hf_token = cfg_get("hf_token")
     snapshot_dedup_cfg = cfg_get("snapshot_dedup", "SNAPSHOT_DEDUP", default=True)
+    
+    # Email configuration
+    email_enabled = args.email_result or bool(cfg_get("email_enabled", default=False))
+    email_recipient = args.email_recipient or cfg_get("email_recipient")
 
     # Days/all precedence
     days = args.days if args.days else cfg_get("days")
@@ -268,6 +282,37 @@ def main():
         pass
     if getattr(args, "no_snapshot_dedup", False):
         config.SNAPSHOT_DEDUP = False
+    
+    # Email configuration
+    config.EMAIL_ENABLED = email_enabled
+    if email_recipient:
+        config.EMAIL_RECIPIENT = email_recipient
+    
+    # Load all email settings from config file
+    email_smtp_server = cfg_get("email_smtp_server")
+    email_smtp_port = cfg_get("email_smtp_port")  
+    email_sender = cfg_get("email_sender")
+    email_password = cfg_get("email_password")
+    email_sender_name = cfg_get("email_sender_name")
+    email_max_retries = cfg_get("email_max_retries")
+    
+    if email_smtp_server:
+        config.EMAIL_SMTP_SERVER = email_smtp_server
+    if email_smtp_port:
+        config.EMAIL_SMTP_PORT = int(email_smtp_port)
+    if email_sender:
+        config.EMAIL_SENDER = email_sender
+    if email_password:
+        config.EMAIL_PASSWORD = email_password
+    if not email_recipient:  # Only set if not overridden by CLI
+        recipient_from_config = cfg_get("email_recipient")
+        if recipient_from_config:
+            config.EMAIL_RECIPIENT = recipient_from_config
+    if email_sender_name:
+        config.EMAIL_SENDER_NAME = email_sender_name
+    if email_max_retries:
+        config.EMAIL_MAX_RETRIES = int(email_max_retries)
+    
     # Recreate dirs if custom output-dir changed
     config.RAW_DIR.mkdir(parents=True, exist_ok=True)
     config.INSIGHTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -402,6 +447,25 @@ def main():
         persister = OutputPersister(config)
         persister.save_entries_snapshot(entries, run_id)
         output_path = persister.persist(insight_pack, run_id)
+
+        # Step 7: Email results (optional)
+        logger.debug("Email configuration - EMAIL_ENABLED: %s, email_enabled flag: %s", 
+                    getattr(config, 'EMAIL_ENABLED', 'NOT_SET'), email_enabled)
+        
+        if config.EMAIL_ENABLED:
+            try:
+                logger.info("Attempting to send email notification")
+                email_service = EmailService(config)
+                email_success = email_service.send_analysis_result(insight_pack, run_id)
+                if email_success:
+                    logger.info("Analysis results emailed successfully")
+                else:
+                    logger.warning("Email sending failed, but continuing")
+            except Exception as e:
+                logger.error("Email service error: %s", str(e))
+                # Don't fail the entire process due to email issues
+        else:
+            logger.info("Email disabled - EMAIL_ENABLED: %s", getattr(config, 'EMAIL_ENABLED', 'NOT_SET'))
 
         # Determine exit code
         if insight_pack.meta.get("mode") == "fallback":
