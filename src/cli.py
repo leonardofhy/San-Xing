@@ -66,7 +66,7 @@ def main():
     parser.add_argument("--days", type=int, help="Analyze last N days")
     parser.add_argument("--all", action="store_true", help="Force full history")
     parser.add_argument("--output-dir", type=Path, default=Path("./data"), help="Output directory")
-    parser.add_argument("--char-budget", type=int, default=8000, help="Max chars for LLM window")
+    parser.add_argument("--char-budget", type=int, default=10000, help="Max chars for LLM window")
     parser.add_argument("--api-key", help="LLM API key (or set LLM_API_KEY env)")
     parser.add_argument(
         "--stream", action="store_true", help="Stream LLM tokens to stdout (if provider supports)"
